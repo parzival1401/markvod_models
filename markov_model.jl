@@ -49,13 +49,13 @@ end
 # Function to calculate the stationary distribution
 function calculate_stationary_distribution(transition_matrix, n_iterations=1000)
     n_states = size(transition_matrix, 1)
-    distribution = ones(1, n_states) / n_states  # Make this a row vector
+    distribution = ones(1, n_states) / n_states 
     
     for _ in 1:n_iterations
         distribution = distribution * transition_matrix
     end
     
-    return vec(distribution)  # Convert back to a column vector for consistency
+    return vec(distribution)  
 end
 
 # Calculate the stationary distribution
