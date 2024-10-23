@@ -13,8 +13,8 @@ pi0 = [1;
        0]
 
 
-μ1, σ1 = 1.0, 0.2 
-μ2, σ2 = 2.0, 0.2  
+μ1, σ1 = 1.0, 0.5 
+μ2, σ2 = 2.0, 0.4  
 
 sz = 1000
 states = zeros(Float64, sz) 
@@ -53,11 +53,7 @@ ax = Axis(fig[1, 1],
     xlabel = "Time",
     ylabel = "Value",
     title = " Observables Over Time")
-#=ax1= Axis(fig[1, 2],
-    xlabel = "Time",
-    ylabel = "Value",
-    title = "states Values Over Time")=#
-# Plot both on same axis
+
 lines!(ax, t, observables, color = (:blue, 0.5), label = "Observable")
 stairs!(ax, t, states, color = (:red, 0.5), label = "State")
 
