@@ -58,3 +58,5 @@ lines!(ax, t, observables, color = (:blue, 0.5), label = "Observable")
 stairs!(ax, t, states, color = (:red, 0.5), label = "State")
 
 display(fig)
+
+save("hmm_observables.png", fig)
