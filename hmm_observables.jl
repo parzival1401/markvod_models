@@ -1,7 +1,8 @@
 using Random
 using CairoMakie
 using Distributions
-
+using BenchmarkTools
+using HiddenMarkovModels
 k12 = 0.1
 k21 = 0.1
 Δt = 0.1
@@ -9,8 +10,7 @@ k21 = 0.1
 T = [1-(k12*Δt) k12*Δt; 
      k21*Δt 1-(k21*Δt)]
 
-pi0 = [1;
-       0]
+pi0 = [1, 0]
 
 
 μ1, σ1 = 1.0, 0.5 
@@ -60,3 +60,7 @@ stairs!(ax, t, states, color = (:red, 0.5), label = "State")
 display(fig)
 
 save("hmm_observables.png", fig)
+
+
+
+
