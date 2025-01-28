@@ -156,4 +156,3 @@ println("P(State 2) = $(alpha[2, t_example])")
 println("True state: $(actual_states[t_example])")
 println("Predicted state: $(argmax(alpha[:, t_example]))")
 
-=#
