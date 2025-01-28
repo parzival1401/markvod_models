@@ -1,8 +1,6 @@
 using Random
 using LinearAlgebra  # Add this for transpose operation
 
-using Random
-using LinearAlgebra 
 
 # Define the states
 states = ["Sunny", "Cloudy", "Rainy"]
