@@ -126,7 +126,7 @@ function calculate_accuracy(alpha, actual_states)
     accuracy = mean(predicted_states .== actual_states)
     return accuracy
 end
-#=
+
 
 k12, k21 = 0.1, 0.1     
 Δt = 0.1               
