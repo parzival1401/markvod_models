@@ -1,7 +1,5 @@
-<<<<<<< HEAD
 using Random
 using LinearAlgebra  # Add this for transpose operation
-=======
 
 using Random
 using LinearAlgebra 
@@ -15,12 +13,10 @@ transition_matrix = [
     0.3 0.5 0.2;  # Cloudy -> Sunny (0.3), Cloudy (0.5), Rainy (0.2)
     0.2 0.4 0.4   # Rainy  -> Sunny (0.2), Cloudy (0.4), Rainy (0.4)
 ]
->>>>>>> 8803fb59de924c0e15691e085495f3b63bd1e0c4
 
 # Define the states
 states = ["Sunny", "Cloudy", "Rainy"]
 
-<<<<<<< HEAD
 # Define the transition matrix
 transition_matrix = [
     0.7 0.2 0.1;  # Sunny  -> Sunny (0.7), Cloudy (0.2), Rainy (0.1)
@@ -29,8 +25,6 @@ transition_matrix = [
 ]
 
 # Function to simulate the next state
-=======
->>>>>>> 8803fb59de924c0e15691e085495f3b63bd1e0c4
 function next_state(current_state, transition_matrix)
     probabilities = transition_matrix[current_state, :]
     r = rand()
@@ -41,17 +35,14 @@ function next_state(current_state, transition_matrix)
             return i
         end
     end
-<<<<<<< HEAD
     return length(probabilities)  # This should never happen, but just in case
 end
 
 # Function to simulate the Markov chain
-=======
     return length(probabilities)  
 end
 
 
->>>>>>> 8803fb59de924c0e15691e085495f3b63bd1e0c4
 function simulate_markov_chain(initial_state, transition_matrix, n_steps)
     chain = [initial_state]
     current_state = initial_state
@@ -63,13 +54,10 @@ function simulate_markov_chain(initial_state, transition_matrix, n_steps)
 end
 
 # Simulate the weather for 10 days
-<<<<<<< HEAD
 initial_state = 1  # 1 corresponds to "Sunny"
 days = 10
-=======
 initial_state = 2  # 1 corresponds to "Sunny"
 days = 20
->>>>>>> 8803fb59de924c0e15691e085495f3b63bd1e0c4
 weather_forecast = simulate_markov_chain(initial_state, transition_matrix, days)
 
 println("Weather forecast for the next $days days:")
