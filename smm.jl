@@ -1,5 +1,5 @@
 using SMLMSim
-
+using CairoMakie
 state_history, args = SMLMSim.InteractionDiffusion.smoluchowski(density=0.02,t_max=50,box_size=10,k_off=0.3,r_react=2)
 dimer_history = SMLMSim.get_dimers(state_history)
 SMLMSim.gen_movie(state_history,args; filename="defaultsim.mp4")
@@ -22,7 +22,43 @@ for i in eachindex(state_history.frames)
 end
 
 
-k_off= args.k_off
-dt = args.dt
+dnx = x_position_particle2 - x_position_particle1
+
+dny = y_position_particle2 - y_position_particle1
 
 
+
+
+
+fig = Figure(size=(1000, 500))
+
+ax1 = Axis(fig[1, 1],
+    xlabel = "Time Frame",
+    ylabel = "Distance X (dnx)",
+    title = "X Distance Difference Over Time")
+
+
+lines!(ax1, 1:length(dnx), dnx, 
+    color = :blue, 
+    linewidth = 2)
+scatter!(ax1, 1:length(dnx), dnx, 
+    color = :blue, 
+    markersize = 4)
+
+
+ax2 = Axis(fig[1, 2],
+    xlabel = "Time Frame",
+    ylabel = "Distance Y (dny)",
+    title = "Y Distance Difference Over Time")
+
+
+lines!(ax2, 1:length(dny), dny, 
+    color = :red, 
+    linewidth = 2)
+scatter!(ax2, 1:length(dny), dny, 
+    color = :red, 
+    markersize = 4)
+
+
+
+fig
