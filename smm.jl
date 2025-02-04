@@ -30,6 +30,9 @@ dny = y_position_particle2 - y_position_particle1
 
 
 
+
+
+
 fig = Figure(size=(1000, 500))
 
 ax1 = Axis(fig[1, 1],
@@ -62,3 +65,42 @@ scatter!(ax2, 1:length(dny), dny,
 
 
 fig
+
+
+
+
+
+function bessel_function(dt,dn_square,dn_1square,sigma)
+    bessel =0
+
+
+        for i in 0:dt:2*pi
+            bessel += (1/(2*pi))*exp((sqrt(dn_square*dn_1square)*cos(i))/sigma^2)
+        end
+    return bessel
+
+end 
+
+function    density(x_position::Vector ,y_position::Vector,sigma,dt=.01)
+    dn_square = zeros(size(x_position))
+    density = zeros(size(x_position))
+
+    for i in 1:length(x_position)
+        if i <length(x_position)
+            dn_square[i]= (x_position[i+1]-x_position[i])^2 + (y_position[i+1]-y_position[i])^2
+        else 
+            break
+        end 
+    end 
+
+    for i in 1:length(dn_square)
+        if i <length(dn_square)
+    
+        density[i] = (sqrt(dn_square[i])/(sigma)^2)*(exp((-dn_square[i+1]-dn_square[i])/(sigma)^2))*(bessel_function(dt,dn_square[i+1],dn_square[i],sigma))
+        else 
+            break
+        end
+    end  
+
+    return density
+end 
