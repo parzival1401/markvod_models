@@ -104,3 +104,6 @@ function    density(x_position::Vector ,y_position::Vector,sigma,dt=.01)
 
     return density
 end 
+
+
+
