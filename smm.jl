@@ -1,6 +1,6 @@
 using SMLMSim
 using CairoMakie
-state_history, args = SMLMSim.InteractionDiffusion.smoluchowski(density=0.02,t_max=50,box_size=10,k_off=0.3,r_react=2)
+state_history, args = SMLMSim.InteractionDiffusion.smoluchowski(density=0.02,t_max=25,box_size=10,k_off=0.3,r_react=2)
 dimer_history = SMLMSim.get_dimers(state_history)
 SMLMSim.gen_movie(state_history,args; filename="defaultsim.mp4")
 
@@ -64,7 +64,6 @@ scatter!(ax2, 1:length(dny), dny,
 
 
 
-fig
 
 
 
@@ -102,8 +101,68 @@ function    density(x_position::Vector ,y_position::Vector,sigma,dt=.01)
         end
     end  
 
-    return density
+    return density, dn_square
 end 
+function density(dn_square::Float64,dn_1square::Float64,sigma)
+    
+    density= (sqrt(dn_square)/(sigma)^2)*(exp((-dn_1square-dn_square)/(sigma)^2))*(bessel_function(0.01,dn_1square,dn_square,sigma))
+    return density
+end
+
+density_var1, dn_square1 = density(dnx, dny, 0.1)
+density_var2, dn_square2 = density(dnx, dny, 1)
+density_var3, dn_square3 = density(dnx, dny, 5)
+density_var4, dn_square4 = density(dnx, dny, 10)
+density_var5, dn_square5 = density(dnx, dny, 0.5)
+
+fig = Figure(size=(1000, 500))
+
+ax1 = Axis(fig[1, 1],
+    xlabel = "dn",
+    ylabel = "g(x)",
+    title = "X Distance Difference Over Time")
+
+scatter!(ax1, dn_square1, density_var1, color = :blue, linewidth = 2, label = "δ = 0.1")
+scatter!(ax1, dn_square2, density_var2, color = :red, linewidth = 2, label = "δ = 1.0")
+scatter!(ax1, dn_square3, density_var3, color = :green, linewidth = 2, label = "δ = 5.0")
+scatter!(ax1, dn_square4, density_var4, color = :purple, linewidth = 2, label = "δ = 10.0")
+scatter!(ax1, dn_square5, density_var5, color = :orange, linewidth = 2, label = "δ = 0.5")
+
+axislegend(ax1, position = :rt) 
+fig 
 
 
 
+
+
+sigma_range = 0.1:0.01:1  
+
+
+
+density_values = [density(dn_square1[2] , dn_square1[1], σ) for σ in sigma_range]
+density_values1 = [density(dn_square1[3] , dn_square1[2], σ) for σ in sigma_range]
+
+
+fig = Figure(size=(800, 600))
+ax1 = Axis(fig[1, 1],
+    xlabel = "σ",
+    ylabel = "Density",
+    title = "Density as a Function of σ")
+ax2 = Axis(fig[1, 2],
+    xlabel = "σ",
+    ylabel = "Density",
+    title = "Density as a Function of σ")
+
+lines!(ax1, sigma_range, density_values, 
+    color = :blue, 
+    linewidth = 2,
+    label = "d[2] and d[1]")
+lines!(ax2, sigma_range, density_values1, 
+    color = :red, 
+    linewidth = 2,
+    label = "d[3] and d[2]")
+
+axislegend(position = :rt)
+
+
+fig
