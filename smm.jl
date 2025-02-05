@@ -21,7 +21,8 @@ for i in eachindex(state_history.frames)
     state_particle1[i] = state_history.frames[i].molecules[1].state
 end
 
-
+dt=args.dt
+l_dimer=args.r_react
 dnx = x_position_particle2 - x_position_particle1
 
 dny = y_position_particle2 - y_position_particle1
@@ -62,7 +63,7 @@ scatter!(ax2, 1:length(dny), dny,
     color = :red, 
     markersize = 4)
 
-
+fig
 
 
 
@@ -80,7 +81,7 @@ function bessel_function(dt,dn_square,dn_1square,sigma)
 
 end 
 
-function    density(x_position::Vector ,y_position::Vector,sigma,dt=.01)
+function    density_free(x_position::Vector ,y_position::Vector,sigma,dt=.01)
     dn_square = zeros(size(x_position))
     density = zeros(size(x_position))
 
@@ -103,24 +104,45 @@ function    density(x_position::Vector ,y_position::Vector,sigma,dt=.01)
 
     return density, dn_square
 end 
+
+function density_dimer(x_position::Vector ,y_position::Vector,sigma::Float64,l_dimer,dt=.01)
+    dn_square = zeros(size(x_position))
+    density = zeros(size(x_position))
+    for i in 1:length(x_position)
+        if i <length(x_position)
+            dn_square[i]= (x_position[i+1]-x_position[i])^2 + (y_position[i+1]-y_position[i])^2
+        else 
+            break
+        end 
+    end 
+
+    for i in 1:length(dn_square)
+        if i <length(dn_square)
+    
+        density[i] = (sqrt(dn_square[i])/(sigma)^2)*(exp((-(l_dimer^2)-dn_square[i])/(sigma)^2))*(bessel_function(dt,(l_dimer^2),dn_square[i],sigma))
+        else 
+            break
+        end
+    end  
+
+    return density, dn_square
+
+end 
 function density(dn_square::Float64,dn_1square::Float64,sigma)
     
     density= (sqrt(dn_square)/(sigma)^2)*(exp((-dn_1square-dn_square)/(sigma)^2))*(bessel_function(0.01,dn_1square,dn_square,sigma))
     return density
 end
 
-density_var1, dn_square1 = density(dnx, dny, 0.1)
-density_var2, dn_square2 = density(dnx, dny, 1)
-density_var3, dn_square3 = density(dnx, dny, 5)
-density_var4, dn_square4 = density(dnx, dny, 10)
-density_var5, dn_square5 = density(dnx, dny, 0.5)
+density_var1, dn_square1 = density_free(dnx, dny, 0.1)
+density_var2, dn_square2 = density_free(dnx, dny, 1)
+density_var3, dn_square3 = density_free(dnx, dny, 5)
+density_var4, dn_square4 = density_free(dnx, dny, 10)
+density_var5, dn_square5 =density_free(dnx, dny, 0.5)
 
 fig = Figure(size=(1000, 500))
 
-ax1 = Axis(fig[1, 1],
-    xlabel = "dn",
-    ylabel = "g(x)",
-    title = "X Distance Difference Over Time")
+ax1 = Axis(fig[1, 1],  xlabel = "dn", ylabel = "g(x)",title = "X Distance Difference Over Time")
 
 scatter!(ax1, dn_square1, density_var1, color = :blue, linewidth = 2, label = "δ = 0.1")
 scatter!(ax1, dn_square2, density_var2, color = :red, linewidth = 2, label = "δ = 1.0")
@@ -135,32 +157,17 @@ fig
 
 
 
-sigma_range = 0.1:0.01:1  
+sigma_range = 0:0.01:1  
 
 
 
 density_values = [density(dn_square1[2] , dn_square1[1], σ) for σ in sigma_range]
-density_values1 = [density(dn_square1[3] , dn_square1[2], σ) for σ in sigma_range]
 
 
 fig = Figure(size=(800, 600))
-ax1 = Axis(fig[1, 1],
-    xlabel = "σ",
-    ylabel = "Density",
-    title = "Density as a Function of σ")
-ax2 = Axis(fig[1, 2],
-    xlabel = "σ",
-    ylabel = "Density",
-    title = "Density as a Function of σ")
+ax1 = Axis(fig[1, 1], xlabel = "σ", ylabel = "Density",title = "Density as a Function of σ")
 
-lines!(ax1, sigma_range, density_values, 
-    color = :blue, 
-    linewidth = 2,
-    label = "d[2] and d[1]")
-lines!(ax2, sigma_range, density_values1, 
-    color = :red, 
-    linewidth = 2,
-    label = "d[3] and d[2]")
+lines!(ax1, sigma_range, density_values,  color = :blue, linewidth = 2, label = "d[2] and d[1]")
 
 axislegend(position = :rt)
 
