@@ -3,7 +3,7 @@ using Random
 using CairoMakie
 using Distributions
 include("forward_alg.jl")
-
+include("smm.jl")
 
 
 
