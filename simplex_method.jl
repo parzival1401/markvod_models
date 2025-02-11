@@ -2,6 +2,8 @@ using LinearAlgebra
 using Random
 using CairoMakie
 using Distributions
+
+
 include("forward_alg.jl")
 include("smm.jl")
 
@@ -66,7 +68,7 @@ function optimize(f, x0; args=(), max_iter=1000, tol=1e-8)
         end
         
         if f_reflect < f_vals[1]
-            expand = center + 2(reflect - center)
+            expand = center + 2(reflect - center) 
             f_expand = f(expand, args...)
             points[end,:] = f_expand < f_reflect ? expand : reflect
             f_vals[end] = min(f_expand, f_reflect)
