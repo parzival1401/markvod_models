@@ -3,6 +3,9 @@ using Random
 using CairoMakie
 using Distributions
 
+
+
+ 
 function simulate_hmm(k12, k21, Δt, sz, μ1, σ1, μ2, σ2)
     
     T = [1-(k12*Δt) k12*Δt; 
