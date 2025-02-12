@@ -76,6 +76,7 @@ function forward_algorithm(observations, T, μ1, σ1, μ2, σ2)
         
         scale[t] = sum(alpha[:, t])
         alpha[:, t] ./= scale[t]
+        
     end
     
     
@@ -129,7 +130,7 @@ function calculate_accuracy(alpha, actual_states)
     accuracy = mean(predicted_states .== actual_states)
     return accuracy
 end
-#=
+
 
 k12, k21 = 0.1, 0.1     
 Δt = 0.1               
@@ -160,5 +161,5 @@ println("True state: $(actual_states[t_example])")
 println("Predicted state: $(argmax(alpha[:, t_example]))")
 
 
-=#
+
 
