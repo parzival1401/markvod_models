@@ -141,6 +141,7 @@ sz = 1000
 
 
 states, observables, actual_states, T = simulate_hmm(k12, k21, Δt, sz, μ1, σ1, μ2, σ2)
+
 t = 0:Δt:((sz-1)*Δt)
 
 alpha, loglik = forward_algorithm(observables, T, μ1, σ1, μ2, σ2)
