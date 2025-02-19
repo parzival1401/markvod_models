@@ -310,3 +310,4 @@ println("\nGaussian 2-state model accuracy: $(round(accuracy_gaus * 100, digits=
 actual_states_int = Int64.(actual_states)
 accuracy_obs = calculate_accuracy(alpha_1, actual_states_int)
 println("\nObservable History model accuracy: $(round(accuracy_obs * 100, digits=2))%")
+
