@@ -107,7 +107,7 @@ end
 
 
 
-function compute_free_density(o::ObservableHist,frame;sigma=0.1, dt=0.01)
+function compute_free_density(o::ObservableHist,frame;sigma=0.2, dt=0.01)
    
         dn = sqrt((o.observables.frames[frame].molecules[1].x - o.observables.frames[frame].molecules[2].x)^2 
         + (o.observables.frames[frame].molecules[1].y - o.observables.frames[frame].molecules[2].y)^2)
@@ -121,7 +121,7 @@ function compute_free_density(o::ObservableHist,frame;sigma=0.1, dt=0.01)
     return density_val
 end
 
-function compute_dimer_density(o::ObservableHist,frame;sigma=0.1, dt=0.01,)
+function compute_dimer_density(o::ObservableHist,frame;sigma=0.2, dt=0.01,)
     
     
     dn = sqrt((o.observables.frames[frame].molecules[1].x - o.observables.frames[frame].molecules[2].x)^2 

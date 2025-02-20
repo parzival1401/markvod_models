@@ -90,12 +90,12 @@ function compute_density(d1, d2, σ)
 end
 
 # Run simulation and get data
-state_history, args, dimer_history = run_simulation()
+state_history, args, dimer_history = run_simulation(box_size=15)
 p1x, p1y, p1s, p2x, p2y, p2s = extract_particle_trajectories(state_history)
 distance_x, distance_y = calculate_distances(p1x, p1y, p2x, p2y)
 
 # First plot: Distance differences over time
-fig = Figure(size=(1000, 500))
+fig = Figure(size=(1000, 500)) 
 
 ax1 = Axis(fig[1, 1],
    xlabel = "Time Frame",

@@ -78,7 +78,7 @@ function p_state(o::Gaus2state, frame; μ=0, σ=1)
     return pdf(Normal(μ, σ), o.observables[frame])
 end 
 
-function p_state(o::ObservableHist, state, frame; dl_dimer=0, sigma=0.1, dt=0.01)
+function p_state(o::ObservableHist, state, frame; dl_dimer=0, sigma=0.2, dt=0.01)
     if state == 1
         return compute_free_density(o, frame, sigma=sigma, dt=dt)
     elseif state == 2
@@ -86,7 +86,7 @@ function p_state(o::ObservableHist, state, frame; dl_dimer=0, sigma=0.1, dt=0.01
     end
 end 
 
-function compute_free_density(o::ObservableHist, frame; sigma=0.1, dt=0.01)
+function compute_free_density(o::ObservableHist, frame; sigma=0.2, dt=0.01)
     # Calculate distance between molecules
     dn = sqrt((o.observables.frames[frame].molecules[1].x - o.observables.frames[frame].molecules[2].x)^2 
               + (o.observables.frames[frame].molecules[1].y - o.observables.frames[frame].molecules[2].y)^2)
@@ -102,7 +102,7 @@ function compute_free_density(o::ObservableHist, frame; sigma=0.1, dt=0.01)
     return exp(min(log_density, 700.0))  # Prevent overflow
 end
 
-function compute_dimer_density(o::ObservableHist, frame; sigma=0.1, dt=0.01)
+function compute_dimer_density(o::ObservableHist, frame; sigma=0.2, dt=0.01)
     # Calculate distance
     dn = sqrt((o.observables.frames[frame].molecules[1].x - o.observables.frames[frame].molecules[2].x)^2 
               + (o.observables.frames[frame].molecules[1].y - o.observables.frames[frame].molecules[2].y)^2)
