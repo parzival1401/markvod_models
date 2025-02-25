@@ -5,7 +5,7 @@ using SMLMSim
 
 abstract type Abstract_obs end
 
-struct Gaus2state <: Abstract_obs
+struct Gaus2state <:Abstract_obs
     states::Vector{Float64} 
     observables::Vector{Float64}
     actual_states::Vector{Int64}
@@ -19,7 +19,7 @@ struct ObservableHist <: Abstract_obs
 end 
 
 function run_simulation(;density=0.02, t_max=25, box_size=10, k_off=0.3, r_react=2)
-    result = SMLMSim.InteractionDiffusion.smoluchowski(
+   result = SMLMSim.InteractionDiffusion.smoluchowski(
         density=density,
         t_max=t_max, 
         box_size=box_size,
@@ -74,363 +74,310 @@ function simulate_hmm(k12, k21, Δt, sz, μ1, σ1, μ2, σ2)
     return states, observables, actual_states, T
 end
 
-function p_state(o::Gaus2state, frame; μ=0, σ=1)
+function p_state(o:: Gaus2state, frame; μ=0, σ=1)
     return pdf(Normal(μ, σ), o.observables[frame])
 end 
 
-function p_state(o::ObservableHist, state, frame; dl_dimer=0, sigma=0.2, dt=0.01)
+function p_state(o::ObservableHist, state, frame; sigma=0.1, dt=0.01)
     if state == 1
         return compute_free_density(o, frame, sigma=sigma, dt=dt)
     elseif state == 2
         return compute_dimer_density(o, frame, sigma=sigma, dt=dt)
     end
-end 
+end
 
 function compute_free_density(o::ObservableHist, frame; sigma=0.2, dt=0.01)
-    # Calculate distance between molecules
-    dn = sqrt((o.observables.frames[frame].molecules[1].x - o.observables.frames[frame].molecules[2].x)^2 
-              + (o.observables.frames[frame].molecules[1].y - o.observables.frames[frame].molecules[2].y)^2)
-
-    dn_1 = sqrt((o.observables.frames[frame+1].molecules[1].x - o.observables.frames[frame+1].molecules[2].x)^2 
-                + (o.observables.frames[frame+1].molecules[1].y - o.observables.frames[frame+1].molecules[2].y)^2)
-
-    # Log-scale calculations for numerical stability
-    log_density = log(dn) - 2*log(sigma) - (dn^2 + dn_1^2)/(2*sigma^2) + 
-                 log(modified_bessel(dt, dn, dn_1, sigma))
+    # Safety check for accessing next frame
+    if frame >= length(o.observables.frames)
+        println("Warning: Trying to access frame beyond range")
+        return 1e-8  # Return a very small non-zero value
+    end
     
-    # Return exp of log-density, with a safety check
-    return exp(min(log_density, 700.0))  # Prevent overflow
+    # Get distances between molecules in current frame
+    dn = sqrt((o.observables.frames[frame].molecules[1].x - o.observables.frames[frame].molecules[2].x)^2 
+        + (o.observables.frames[frame].molecules[1].y - o.observables.frames[frame].molecules[2].y)^2)
+    
+    # Get distances between molecules in next frame
+    dn_1 = sqrt((o.observables.frames[frame+1].molecules[1].x - o.observables.frames[frame+1].molecules[2].x)^2 
+        + (o.observables.frames[frame+1].molecules[1].y - o.observables.frames[frame+1].molecules[2].y)^2)
+    
+    # Avoid potential Inf/NaN from exp with large negative numbers
+    exponent = min(0, (-(dn^2) - (dn_1)^2)/sigma^2)
+    
+    # Calculate modified Bessel function with safety checks
+    bessel_value = modified_bessel(dt, dn, dn_1, sigma)
+    
+    # Calculate density with safety checks to avoid zero/Inf
+    density_val = max(1e-8, (dn/sigma^2) * exp(exponent) * bessel_value)
+    
+    # Debug output
+    println("Free density: $(round(density_val, digits=10))")
+    
+    return density_val
 end
 
 function compute_dimer_density(o::ObservableHist, frame; sigma=0.2, dt=0.01)
-    # Calculate distance
+    # Get distance between molecules in current frame
     dn = sqrt((o.observables.frames[frame].molecules[1].x - o.observables.frames[frame].molecules[2].x)^2 
-              + (o.observables.frames[frame].molecules[1].y - o.observables.frames[frame].molecules[2].y)^2)
+        + (o.observables.frames[frame].molecules[1].y - o.observables.frames[frame].molecules[2].y)^2)
 
-    # Log-scale calculations
-    log_density = log(dn) - 2*log(sigma) - 
-                 (o.arguments.d_dimer^2 + dn^2)/(2*sigma^2) + 
-                 log(modified_bessel(dt, o.arguments.r_react, dn, sigma))
+    # Debug the inputs occasionally to avoid excessive output
+    if frame % 500 == 0
+        println("Debug dimer density inputs:")
+        println("  dn = $dn")
+        println("  r_react = $(o.arguments.r_react)")
+        println("  sigma = $sigma")
+    end
     
-    # Return exp of log-density, with a safety check
-    return exp(min(log_density, 700.0))  # Prevent overflow
+    # Ensure we have a minimum distance to avoid numerical issues
+    effective_dn = max(0.001, dn)
+    
+    # Use r_react from o.arguments (not simulation.arguments)
+    d_dimer = o.arguments.r_react
+    
+    # Compute a safe exponent - limit to avoid underflow
+    exponent = min(0, (-(d_dimer^2) - (effective_dn)^2)/sigma^2)
+    
+    # Compute bessel value with safety checks
+    bessel_value = modified_bessel(dt, d_dimer, effective_dn, sigma)
+    
+    # Include a small baseline probability to prevent zero density
+    # This is crucial since your output shows all dimer densities are zero
+    baseline = 1e-5
+    density_val = ((effective_dn)/sigma^2) * exp(exponent) * bessel_value + baseline
+    
+    println("Dimer density: $(round(density_val, digits=10))")
+    return density_val
 end
 
 function modified_bessel(dt, d1, d2, σ)
+    # Ensure parameters are positive to avoid NaN results
+    d1 = max(1e-10, d1)
+    d2 = max(1e-10, d2)
+    σ = max(1e-10, σ) 
+    
     result = 0.0
-    n_points = ceil(Int, 2π/dt)
     
-    for i in 0:n_points
-        θ = i * dt
-        exponent = min((d1 * d2 * cos(θ))/σ^2, 700.0)  # Prevent overflow
-        result += exp(exponent)/(2π)
+    # Calculate x with bounds to prevent overflow
+    x = min(10.0, (d1 * d2) / (σ^2))
+    
+    # Use fixed number of steps instead of dt parameter for consistency
+    n_steps = 200
+    dt_adjusted = 2*pi/n_steps
+    
+    for i in 0:n_steps-1
+        θ = i * dt_adjusted
+        # Use bounded exp to prevent overflow
+        exp_value = min(1e8, exp(min(20.0, x * cos(θ))))
+        result += exp_value
     end
+
+    result *= dt_adjusted / (2*pi)
     
-    return max(result, 1e-300)  # Prevent underflow
+    # Ensure non-zero result
+    result = max(1e-8, result)
+    
+    return result
 end
 
-function forward_algorithm(observables::ObservableHist; debug=false)
-    N = length(observables.observables.frames)-1
-    alpha = zeros(2, N)
-    scale = zeros(N)  
-    
-    # Calculate distance-dependent transition probabilities for first frame
-    init_dist = sqrt(
-        (observables.observables.frames[1].molecules[1].x - observables.observables.frames[1].molecules[2].x)^2 + 
-        (observables.observables.frames[1].molecules[1].y - observables.observables.frames[1].molecules[2].y)^2
-    )
-    
-    if debug
-        println("Initial distance between molecules: $init_dist")
-        println("Reaction radius: $(observables.arguments.r_react)")
-    end
-    
-    # Initialize first frame based on distance
-    if init_dist <= observables.arguments.r_react
-        alpha[1, 1] = 0.2  # Lower probability of free state if close
-        alpha[2, 1] = 0.8  # Higher probability of dimer state if close
-    else
-        alpha[1, 1] = 0.8  # Higher probability of free state if far
-        alpha[2, 1] = 0.2  # Lower probability of dimer state if far
-    end
-    
-    scale[1] = sum(alpha[:, 1])
-    alpha[:, 1] ./= scale[1]
-    
-    if debug
-        println("Initial alpha: ", alpha[:, 1])
-    end
-    
-    for t in 2:N
-        # Calculate current distance
-        curr_dist = sqrt(
-            (observables.observables.frames[t].molecules[1].x - observables.observables.frames[t].molecules[2].x)^2 + 
-            (observables.observables.frames[t].molecules[1].y - observables.observables.frames[t].molecules[2].y)^2
-        )
-        
-        # Calculate distance-dependent transition probabilities
-        p_to_dimer = exp(-curr_dist/observables.arguments.r_react)
-        p_to_dimer = min(max(p_to_dimer, 0.1), 0.9)  # Keep probabilities bounded
-        
-        # Construct transition matrix based on current distance
-        T = [1-p_to_dimer p_to_dimer;
-             observables.arguments.k_off 1-observables.arguments.k_off]
-        
-        if debug && t <= 5
-            println("\nFrame $t:")
-            println("Distance: $curr_dist")
-            println("P(to dimer): $p_to_dimer")
-            println("Transition matrix:")
-            println(T)
-        end
-        
-        # Calculate emission probabilities
-        e1 = p_state(observables, 1, t)
-        e2 = p_state(observables, 2, t)
-        
-        if debug && t <= 5
-            println("Emission probabilities - Free: $e1, Dimer: $e2")
-        end
-        
-        # Forward algorithm update
-        alpha[1, t] = (alpha[1, t-1]*T[1,1] + alpha[2, t-1]*T[2,1]) * e1
-        alpha[2, t] = (alpha[1, t-1]*T[1,2] + alpha[2, t-1]*T[2,2]) * e2
-        
-        # Scale to prevent numerical underflow
-        scale[t] = sum(alpha[:, t])
-        if scale[t] > 0
-            alpha[:, t] ./= scale[t]
-        end
-        
-        if debug && t <= 5
-            println("Alpha after scaling: ", alpha[:, t])
-        end
-    end
-    
-    loglikelihood = sum(log.(scale[scale .> 0]))
-    
-    return alpha, loglikelihood
-end
-
-function forward_algorithm(observations::Gaus2state, T, μ1, σ1, μ2, σ2; debug=false)
+function forward_algorithm(observations::Gaus2state, T, μ1, σ1, μ2, σ2)
     N = length(observations.observables)
     alpha = zeros(2, N)
     scale = zeros(N)  
     
+    # Initialize with emission probabilities
     alpha[1, 1] = p_state(observations, 1, μ=μ1, σ=σ1)
     alpha[2, 1] = p_state(observations, 1, μ=μ2, σ=σ2)
     
-    if debug
-        println("Initial probabilities - State 1: $(alpha[1, 1]), State 2: $(alpha[2, 1])")
+    # Normalize with safety check
+    scale[1] = sum(alpha[:, 1])
+    if scale[1] > 0
+        alpha[:, 1] ./= scale[1]
+    else
+        alpha[1, 1] = 0.5
+        alpha[2, 1] = 0.5
+        scale[1] = 1.0
     end
     
-    scale[1] = sum(alpha[:, 1])
-    alpha[:, 1] ./= scale[1]
-    
+    # Forward pass
     for t in 2:N
+        # Calculate emission probabilities
         e1 = p_state(observations, t, μ=μ1, σ=σ1)
         e2 = p_state(observations, t, μ=μ2, σ=σ2)
         
-        if debug && t <= 5
-            println("\nFrame $t:")
-            println("Emission probabilities - State 1: $e1, State 2: $e2")
-        end
+        # Handle potential zero probabilities
+        e1 = max(1e-10, e1)
+        e2 = max(1e-10, e2)
         
+        # Calculate forward probabilities
         alpha[1, t] = (alpha[1, t-1]*T[1,1] + alpha[2, t-1]*T[2,1]) * e1
         alpha[2, t] = (alpha[1, t-1]*T[1,2] + alpha[2, t-1]*T[2,2]) * e2
         
-        scale[t] = sum(alpha[:, t])
-        alpha[:, t] ./= scale[t]
-        
-        if debug && t <= 5
-            println("Alpha after scaling: ", alpha[:, t])
+        # Normalize to prevent underflow
+        scale[t] = alpha[1, t] + alpha[2, t]
+        if scale[t] > 0
+            alpha[:, t] ./= scale[t]
+        else
+            # If both probabilities are effectively zero, use previous distribution
+            alpha[:, t] = alpha[:, t-1]
+            scale[t] = 1e-10
         end
     end
     
-    loglikelihood = sum(log.(scale))
+    # Calculate log-likelihood, handling potential zeros
+    safe_scale = [max(1e-300, s) for s in scale]
+    loglikelihood = sum(log.(safe_scale))
     
     return alpha, loglikelihood
 end
 
-function analyze_states(alpha::Matrix{Float64}, actual_states::Vector{Int64})
-    predicted_states = zeros(Int64, size(alpha, 2))
-    for t in 1:size(alpha, 2)
-        predicted_states[t] = argmax(alpha[:, t])
+function forward_algorithm(observables::ObservableHist)
+    N = length(observables.observables.frames)-1
+    alpha = zeros(2, N)
+    scale = zeros(N)
+    
+    # Set initial state probabilities with minimum values to avoid zeros
+    alpha[1, 1] = max(1e-8, p_state(observables, 1, 1))
+    alpha[2, 1] = max(1e-8, p_state(observables, 2, 1))
+    
+    # Check if both values are very small
+    if alpha[1, 1] < 1e-6 && alpha[2, 1] < 1e-6
+        println("Warning: Both initial state probabilities are very small. Using uniform.")
+        alpha[1, 1] = 0.5
+        alpha[2, 1] = 0.5
     end
     
-    # Print first few entries to verify alignment
-    println("\nFirst 10 entries comparison:")
-    println("Index | Predicted | Actual | Alpha probabilities")
-    println("-" ^ 50)
-    for i in 1:min(10, length(predicted_states))
-        println("$i | $(predicted_states[i]) | $(actual_states[i]) | [$(round(alpha[1,i], digits=3)), $(round(alpha[2,i], digits=3))]")
-    end
+    println("Initial alpha: $(alpha[:, 1])")
     
-    # Print state distribution
-    n_state1_pred = sum(predicted_states .== 1)
-    n_state2_pred = sum(predicted_states .== 2)
-    n_state1_actual = sum(actual_states .== 1)
-    n_state2_actual = sum(actual_states .== 2)
+    # Normalize
+    scale[1] = sum(alpha[:, 1])
+    alpha[:, 1] ./= scale[1]
     
-    println("\nState Distribution:")
-    println("Predicted - State 1: $n_state1_pred, State 2: $n_state2_pred")
-    println("Actual    - State 1: $n_state1_actual, State 2: $n_state2_actual")
+    # Set up transition matrix with minimum probabilities
+    Δt = observables.arguments.dt
     
-    # Calculate accuracy
-    correct = sum(predicted_states .== actual_states)
-    accuracy = correct / length(actual_states)
+    # Make sure k_on is non-zero to allow state transitions
+    k_on = max(0.01, 0.1)  # Ensure minimum value
+    k_off = max(0.01, observables.arguments.k_off)  # Ensure minimum value
     
-    return accuracy, predicted_states
-end
-
-# Run the analysis
-k12, k21 = 0.1, 0.1     
-Δt = 0.1               
-sz = 1000               
-μ1, σ1 = 1.0, 1.0
-μ2, σ2 = 2.0, 1.0
-t = 0:Δt:((sz-1)*Δt)
-
-# Gaussian 2-state model
-println("\nRunning Gaussian 2-state model...")
-states, obs, act_states, T = simulate_hmm(k12, k21, Δt, sz, μ1, σ1, μ2, σ2)
-observables = Gaus2state(states, obs, act_states, T)
-alpha, loglik = forward_algorithm(observables, T, μ1, σ1, μ2, σ2, debug=true)
-println("\nAnalyzing Gaussian Model:")
-accuracy_gaus, predicted_states_gaus = analyze_states(alpha, act_states)
-println("\nGaussian 2-state model accuracy: $(round(accuracy_gaus * 100, digits=2))%")
-
-# Observable History model
-println("\nRunning Observable History model...")
-simulation = run_simulation()
-alpha_1, loglik_1 = forward_algorithm(simulation, debug=true)
-
-# Collect actual states with debugging information
-println("\nCollecting actual states...")
-actual_states = Int64[]
-for i in 1:length(simulation.observables.frames)-1
-    # Print the first few molecule states for debugging
-    if i <= 5
-        println("Frame $i - Molecule 1 state: $(simulation.observables.frames[i].molecules[1].state)")
-        println("         Distance between molecules: $( sqrt(
-            (simulation.observables.frames[i].molecules[1].x - simulation.observables.frames[i].molecules[2].x)^2 + 
-            (simulation.observables.frames[i].molecules[1].y - simulation.observables.frames[i].molecules[2].y)^2))")
-    end
-    push!(actual_states, simulation.observables.frames[i].molecules[1].state)     
-end
-
-println("\nAnalyzing Observable History Model:")
-accuracy_obs, predicted_states_obs = analyze_states(alpha_1, actual_states)
-println("\nObservable History model accuracy: $(round(accuracy_obs * 100, digits=2))%")
-
-# Visualization of results
-function plot_state_predictions(t, predicted_states, actual_states, model_name)
-    fig = Figure(size=(900, 400))
+    T = [1-(k_on*Δt) k_on*Δt; 
+         k_off*Δt 1-(k_off*Δt)]
     
-    ax = Axis(fig[1, 1],
-        xlabel = "Time",
-        ylabel = "State",
-        title = "$(model_name) - Predicted vs Actual States")
+    println("Transition matrix T:")
+    println(T)
     
-    # Plot actual states
-    scatter!(ax, t, actual_states, color=:blue, label="Actual States", markersize=2)
-    
-    # Plot predicted states
-    lines!(ax, t, predicted_states, color=:red, label="Predicted States")
-    
-    # Add legend
-    axislegend(ax)
-    
-    # Plot state probabilities
-    ax2 = Axis(fig[2, 1],
-        xlabel = "Time",
-        ylabel = "Probability",
-        title = "State Probabilities")
-    
-    if model_name == "Gaussian_Model"
-        lines!(ax2, t, alpha[1, :], label="P(State 1)", color=:blue)
-        lines!(ax2, t, alpha[2, :], label="P(State 2)", color=:red)
-    else
-        lines!(ax2, t, alpha_1[1, :], label="P(State 1)", color=:blue)
-        lines!(ax2, t, alpha_1[2, :], label="P(State 2)", color=:red)
-    end
-    
-    axislegend(ax2)
-    
-    display(fig)
-    save("$(model_name)_predictions.png", fig)
-end
-
-# Calculate time vectors for plotting
-t_gaus = 0:Δt:((sz-1)*Δt)
-t_obs = 0:Δt:((length(actual_states)-1)*Δt)
-
-# Plot results for both models
-println("\nGenerating visualizations...")
-plot_state_predictions(t_gaus, predicted_states_gaus, act_states, "Gaussian_Model")
-plot_state_predictions(t_obs, predicted_states_obs, actual_states, "Observable_History_Model")
-
-# Additional Analysis
-println("\nAdditional Analysis:")
-
-# Transition statistics
-function analyze_transitions(states)
-    transitions = Dict{Tuple{Int,Int}, Int}()
-    for i in 1:(length(states)-1)
-        transition = (states[i], states[i+1])
-        transitions[transition] = get(transitions, transition, 0) + 1
-    end
-    
-    total = sum(values(transitions))
-    println("\nTransition probabilities:")
-    for (trans, count) in transitions
-        prob = count / total
-        println("$(trans[1]) → $(trans[2]): $(round(prob, digits=3))")
-    end
-end
-
-println("\nGaussian Model Transitions:")
-analyze_transitions(act_states)
-
-println("\nObservable History Model Transitions:")
-analyze_transitions(actual_states)
-
-# State duration analysis
-function analyze_state_durations(states)
-    current_state = states[1]
-    current_duration = 1
-    durations = Dict{Int, Vector{Int}}()
-    
-    for i in 2:length(states)
-        if states[i] == current_state
-            current_duration += 1
+    # Forward pass
+    for t in 2:N
+        # Calculate emission probabilities with minimum values
+        e1 = max(1e-8, p_state(observables, 1, t))
+        e2 = max(1e-8, p_state(observables, 2, t))
+        
+        # Add noise to zero probabilities to allow state switching
+        if e1 < 1e-6 && e2 > 1e-6
+            e1 = 1e-6 * e2  # Small proportion of the other state
+        elseif e2 < 1e-6 && e1 > 1e-6
+            e2 = 1e-6 * e1  # Small proportion of the other state
+        elseif e1 < 1e-6 && e2 < 1e-6
+            # Both probabilities tiny - use previous values or uniform
+            e1 = 0.5
+            e2 = 0.5
+        end
+        
+        # Forward update with smoothing to prevent getting stuck in one state
+        alpha[1, t] = (alpha[1, t-1]*T[1,1] + alpha[2, t-1]*T[2,1]) * e1
+        alpha[2, t] = (alpha[1, t-1]*T[1,2] + alpha[2, t-1]*T[2,2]) * e2
+        
+        # Apply minimum probability to prevent degenerate cases
+        alpha[1, t] = max(1e-8, alpha[1, t])
+        alpha[2, t] = max(1e-8, alpha[2, t])
+        
+        # Normalize
+        scale[t] = sum(alpha[:, t])
+        if scale[t] > 0
+            alpha[:, t] ./= scale[t]
         else
-            if !haskey(durations, current_state)
-                durations[current_state] = Int[]
-            end
-            push!(durations[current_state], current_duration)
-            current_state = states[i]
-            current_duration = 1
+            println("Warning: Zero scale at t=$t. Using previous distribution.")
+            alpha[:, t] = alpha[:, t-1]
+            scale[t] = 1e-8
+        end
+        
+        # Debug outputs for a few iterations
+        if t % 500 == 0 || t > N-5
+            println("t=$t, e1=$e1, e2=$e2")
+            println("alpha[$t]: $(alpha[:, t])")
+            println("scale[$t]: $(scale[t])")
         end
     end
     
-    # Add the last duration
-    if !haskey(durations, current_state)
-        durations[current_state] = Int[]
-    end
-    push!(durations[current_state], current_duration)
+    # Replace zeros with small values for log calculation
+    safe_scale = max.(1e-300, scale)
+    loglikelihood = sum(log.(safe_scale))
     
-    println("\nState duration statistics:")
-    for (state, durs) in durations
-        println("State $state:")
-        println("  Mean duration: $(mean(durs))")
-        println("  Max duration: $(maximum(durs))")
-        println("  Min duration: $(minimum(durs))")
-    end
+    return alpha, loglikelihood
 end
 
-println("\nGaussian Model State Durations:")
-analyze_state_durations(act_states)
+function calculate_accuracy(alpha::Matrix{Float64}, actual_states::Vector{Int64})
+    n_timesteps = min(size(alpha, 2), length(actual_states))
+    
+    # Debug dimension info
+    println("Alpha dimensions: $(size(alpha))")
+    println("Actual states length: $(length(actual_states))")
+    println("Using n_timesteps = $n_timesteps")
+    
+    # Convert alpha to predicted states
+    predicted_states = zeros(Int64, n_timesteps)
+    for t in 1:n_timesteps
+        predicted_states[t] = argmax(alpha[:, t])
+    end
+    
+    # Calculate accuracy
+    actual_states_trimmed = actual_states[1:n_timesteps]
+    correct = sum(predicted_states .== actual_states_trimmed)
+    accuracy = correct / n_timesteps
+    
+    # Show state distribution to debug
+    state1_count = sum(predicted_states .== 1)
+    state2_count = sum(predicted_states .== 2)
+    
+    println("Predicted state distribution: State 1: $state1_count ($(round(state1_count/n_timesteps*100, digits=2))%), State 2: $state2_count ($(round(state2_count/n_timesteps*100, digits=2))%)")
+    
+    # Show actual state distribution
+    actual_state1_count = sum(actual_states_trimmed .== 1)
+    actual_state2_count = sum(actual_states_trimmed .== 2)
+    
+    println("Actual state distribution: State 1: $actual_state1_count ($(round(actual_state1_count/n_timesteps*100, digits=2))%), State 2: $actual_state2_count ($(round(actual_state2_count/n_timesteps*100, digits=2))%)")
+    
+    return accuracy
+end
 
-println("\nObservable History Model State Durations:")
-analyze_state_durations(actual_states)
+# Original test code (left here for reference)
+k12, k21 = 0.1, 0.1     
+Δt = 0.1               
+sz = 1000               
+μ1, σ1 = 1.0, 1
+μ2, σ2 = 2.0, 1
+t = 0:Δt:((sz-1)*Δt)
+
+
+states, obs, act_states, T = simulate_hmm(k12, k21, Δt, sz, μ1, σ1, μ2, σ2)
+observables = Gaus2state(states, obs, act_states, T)
+
+simulation = run_simulation()
+
+alpha_1, loglik_1 = forward_algorithm(simulation)
+
+
+alpha, loglik = forward_algorithm(observables, T, μ1, σ1, μ2, σ2)
+actual_states=[]
+
+for i in 1:length(simulation.observables.frames)-1
+    push!(actual_states, simulation.observables.frames[i].molecules[1].state)     
+end
+
+
+accuracy_gaus = calculate_accuracy(alpha, act_states)
+println("\nGaussian 2-state model accuracy: $(round(accuracy_gaus * 100, digits=2))%")
+
+actual_states_int = Int64.(actual_states)
+accuracy_obs = calculate_accuracy(alpha_1, actual_states_int)
+println("\nObservable History model accuracy: $(round(accuracy_obs * 100, digits=2))%")

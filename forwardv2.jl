@@ -91,7 +91,7 @@ function p_state(o:: Gaus2state,frame;μ=0, σ=1)
 end 
  
 
-function p_state(o::ObservableHist, state,frame;dl_dimer=0, sigma=0.1, dt=0.01,)
+function p_state(o::ObservableHist, state,frame;  sigma=0.1, dt=0.01,)
     
     if state == 1
         return compute_free_density(o, frame,sigma=sigma, dt=dt)
@@ -102,7 +102,6 @@ function p_state(o::ObservableHist, state,frame;dl_dimer=0, sigma=0.1, dt=0.01,)
        
     end
 
-
 end 
 
 
@@ -111,12 +110,14 @@ function compute_free_density(o::ObservableHist,frame;sigma=0.2, dt=0.01)
    
         dn = sqrt((o.observables.frames[frame].molecules[1].x - o.observables.frames[frame].molecules[2].x)^2 
         + (o.observables.frames[frame].molecules[1].y - o.observables.frames[frame].molecules[2].y)^2)
+        println("\n dn free: $dn")
 
         dn_1 = sqrt((o.observables.frames[frame+1].molecules[1].x - o.observables.frames[frame+1].molecules[2].x)^2 
         + (o.observables.frames[frame+1].molecules[1].y - o.observables.frames[frame+1].molecules[2].y)^2)
-
+        println("\n dn-1 free: $dn_1")
         density_val = (dn/sigma^2) *  (exp((-(dn^2) - (dn_1)^2))/sigma^2) * modified_bessel(dt, dn, dn_1,sigma)
-    
+
+        println("\nfreee density val: $density_val")
        
     return density_val
 end
@@ -128,21 +129,26 @@ function compute_dimer_density(o::ObservableHist,frame;sigma=0.2, dt=0.01,)
         + (o.observables.frames[frame].molecules[1].y - o.observables.frames[frame].molecules[2].y)^2)
 
 
-    density_val = ((dn)/sigma^2) *  exp((-(simulation.arguments.d_dimer^2) - (dn)^2)/sigma^2) *  modified_bessel(dt, simulation.arguments.r_react, dn, sigma)
-    
+    density_val = ((dn)/sigma^2) *  exp((-(o.arguments.d_dimer^2) - (dn)^2)/sigma^2) *  modified_bessel(dt, o.arguments.r_react, dn, sigma)
+    println("\nfreee dimer density : $density_val")
     return density_val
 end
 
 
 
 function modified_bessel(dt, d1, d2, σ)
-    result = 0
-    for θ in 0:dt:2π
-        result += (1/(2π)) * exp((((d1 * d2)^2) * cos(θ))/σ^2)
+    result = 0.0
+    
+    x = (d1 * d2) / (σ^2)
+    
+    for θ in 0:dt:2*pi
+        result += exp(x * cos(θ))
     end
+
+    result *= dt / (2*pi)
+    
     return result
 end
-
 
 function forward_algorithm(observables::ObservableHist)
 
@@ -153,11 +159,18 @@ function forward_algorithm(observables::ObservableHist)
     
     alpha[1, 1] = p_state(observables,1,1)
     alpha[2, 1] = p_state(observables,2,1)
-    
+
+    println(" alpha[1, 1]: $(alpha[1, 1])")
+    println(" alpha[2, 1]: $(alpha[2, 1])")
     scale[1] = sum(alpha[:, 1])
     alpha[:, 1] ./= scale[1]
-    
-   
+
+    Δt=observables.arguments.dt
+
+    k_on=0.1
+    T = [1-(k_on*Δt) k_on*Δt; 
+    observables.arguments.k_off*Δt 1-(observables.arguments.k_off*Δt)]
+
     for t in 2:N
        
         e1 = p_state(observables, 1,t)
@@ -170,6 +183,15 @@ function forward_algorithm(observables::ObservableHist)
         
         scale[t] = sum(alpha[:, t])
         alpha[:, t] ./= scale[t]
+        if t>N-5
+            println("e1:$e1")
+            println("e2:$e2")
+            println("alpha[1,t]: $(alpha[1, t])")
+            println("alpha[2,t]: $(alpha[2, t])")
+            println("scale[t]: $(scale[t])")
+            
+
+        end 
     end
     
     
@@ -205,6 +227,9 @@ function forward_algorithm(observations::Gaus2state, T, μ1, σ1, μ2, σ2)
         
         scale[t] = sum(alpha[:, t])
         alpha[:, t] ./= scale[t]
+
+
+        
     end
     
     
@@ -213,48 +238,26 @@ function forward_algorithm(observations::Gaus2state, T, μ1, σ1, μ2, σ2)
     return alpha, loglikelihood
 end
 
-
-
-function plot_hmm_results(t, states, observables, actual_states, alpha)
-    fig = Figure(size=(1200, 800))
+function calculate_accuracy(alpha::Matrix{Float64}, actual_states::Vector{Int64})
     
-    ax1 = Axis(fig[1, 1],
-        xlabel = "Time",
-        ylabel = "Value",
-        title = "HMM Simulation")
+    n_timesteps = min(size(alpha, 2), length(actual_states))
     
-    lines!(ax1, t, observables, color = (:blue, 0.5), label = "Observations")
-    stairs!(ax1, t, states, color = (:red, 0.5), label = "True States")
-    axislegend(ax1)
-    
-    ax2 = Axis(fig[2, 1],
-        xlabel = "Time",
-        ylabel = "Probability",
-        title = "Forward Probabilities (Normalized)")
-    
-    
-    for i in 1:length(t)-1
-        if actual_states[i] == 1
-            vspan!(ax2, t[i], t[i+1], color = (:blue, 0.1))
-        else
-            vspan!(ax2, t[i], t[i+1], color = (:red, 0.1))
-        end
+   
+    predicted_states = zeros(Int64, n_timesteps)
+    for t in 1:n_timesteps
+        predicted_states[t] = argmax(alpha[:, t])
     end
     
+   
+    actual_states_trimmed = actual_states[1:n_timesteps]
+  
+    correct = sum(predicted_states .== actual_states_trimmed)
+    accuracy = correct / n_timesteps
     
-    lines!(ax2, t, alpha[1, :], color = :blue, label = "P(State 1)")
-    lines!(ax2, t, alpha[2, :], color = :red, label = "P(State 2)")
-    axislegend(ax2)
-    
-    
-    ylims!(ax2, 0, 1)
-    
-    display(fig)
-    save("algorithm_results.png", fig)
-    return fig
+   
+  
+    return accuracy
 end
-
-
 
 
 
@@ -282,32 +285,11 @@ for i in 1:length(simulation.observables.frames)-1
 end
 
 
-function calculate_accuracy(alpha::Matrix{Float64}, actual_states::Vector{Int64})
-    
-    n_timesteps = min(size(alpha, 2), length(actual_states))
-    
-   
-    predicted_states = zeros(Int64, n_timesteps)
-    for t in 1:n_timesteps
-        predicted_states[t] = argmax(alpha[:, t])
-    end
-    
-   
-    actual_states_trimmed = actual_states[1:n_timesteps]
-  
-    correct = sum(predicted_states .== actual_states_trimmed)
-    accuracy = correct / n_timesteps
-    
-   
-  
-    return accuracy
-end
-
-
 accuracy_gaus = calculate_accuracy(alpha, act_states)
 println("\nGaussian 2-state model accuracy: $(round(accuracy_gaus * 100, digits=2))%")
 
 actual_states_int = Int64.(actual_states)
 accuracy_obs = calculate_accuracy(alpha_1, actual_states_int)
 println("\nObservable History model accuracy: $(round(accuracy_obs * 100, digits=2))%")
+
 

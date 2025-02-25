@@ -46,10 +46,16 @@ end
 
 
 function modified_bessel(dt, d1, d2, σ)
-    result = 0
+    result = 0.0
+    
+    x = (d1 * d2) / (σ^2)
+    
     for θ in 0:dt:2π
-        result += (1/(2π)) * exp((((d1 * d2)^2) * cos(θ))/σ^2)
+        result += exp(x * cos(θ))
     end
+    
+    result *= dt / (2π)
+    
     return result
 end
 
