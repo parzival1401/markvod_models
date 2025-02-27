@@ -4,7 +4,7 @@ using CairoMakie
 using Distributions
 using SMLMSim
 using SpecialFunctions
-
+using Printf
 
 
 
@@ -92,7 +92,7 @@ function p_state(o:: Gaus2state,frame;μ=0, σ=1)
 end 
  
 
-function p_state(o::ObservableHist, state,frame;  sigma=0.1, dt=0.01,)
+function p_state(o::ObservableHist, state,frame;  sigma=1, dt=0.01,)
     
     if state == 1
         return compute_free_density(o, frame,sigma=sigma, dt=dt)
@@ -107,7 +107,7 @@ end
 
 
 
-function compute_free_density(o::ObservableHist,frame;sigma=0.01, dt=0.01)
+function compute_free_density(o::ObservableHist,frame;sigma=1, dt=0.01)
    
         dn = sqrt((o.observables.frames[frame].molecules[1].x - o.observables.frames[frame].molecules[2].x)^2 
         + (o.observables.frames[frame].molecules[1].y - o.observables.frames[frame].molecules[2].y)^2)
@@ -116,14 +116,14 @@ function compute_free_density(o::ObservableHist,frame;sigma=0.01, dt=0.01)
         dn_1 = sqrt((o.observables.frames[frame-1].molecules[1].x - o.observables.frames[frame-1].molecules[2].x)^2 
         + (o.observables.frames[frame-1].molecules[1].y - o.observables.frames[frame-1].molecules[2].y)^2)
         println("\n dn-1 free: $dn_1")
-        density_val = (dn/sigma^2) *  (exp((-(dn^2) - (dn_1)^2))/sigma^2) * modified_bessel( dt,dn, dn_1,sigma)
+        density_val = (dn/sigma^2) *  (exp((-(dn^2) - (dn_1)^2)/sigma^2)) * modified_bessel( dt,dn, dn_1,sigma)
 
         println("\nfreee density val: $density_val")
        
     return density_val
 end
 
-function compute_dimer_density(o::ObservableHist,frame;sigma=0.01, dt=0.01,)
+function compute_dimer_density(o::ObservableHist,frame;sigma=1, dt=0.01,)
     
     
     dn = sqrt((o.observables.frames[frame].molecules[1].x - o.observables.frames[frame].molecules[2].x)^2 
@@ -140,9 +140,16 @@ end
 
 function modified_bessel(dt, d1, d2, σ)
     result_me = 0.0
-    
-    x = (d1 * d2) / (σ^2)
-    
+    @printf "d1 = %e\n" d1
+    @printf "d2 = %e\n" d2
+    @printf "σ = %e\n" σ
+    @printf "σ² = %e\n" σ^2
+    @printf "d1 * d2 = %e\n" (d1 * d2)
+
+    x = (d1*d2)/(σ^2)
+
+    println("\nx_beseel: $x")
+
     for θ in 0:dt:2*pi
         result_me += exp(x * cos(θ))
     end
@@ -151,7 +158,7 @@ function modified_bessel(dt, d1, d2, σ)
     #result_sp = besseli(0, x)
 
     println("result besseel: $result_me")
-    println("x_beseel: $x")
+    
     #println("special using pack: $result_sp")
     return result_me
 end
@@ -222,8 +229,7 @@ function forward_algorithm(observables::ObservableHist)
     alpha[1, 1] = p_state(observables,1,2)
     alpha[2, 1] = p_state(observables,2,2)
 
-    println(" alpha[1, 1]: $(alpha[1, 1])")
-    println(" alpha[2, 1]: $(alpha[2, 1])")
+    
     scale[1] = sum(alpha[:, 1])
     alpha[:, 1] ./= scale[1]
 
@@ -233,7 +239,7 @@ function forward_algorithm(observables::ObservableHist)
     T = [1-(k_on*Δt) k_on*Δt; 
     observables.arguments.k_off*Δt 1-(observables.arguments.k_off*Δt)]
 
-    for t in 3:N
+    for t in 2:N
        
         e1 = p_state(observables, 1,t)
         e2 = p_state(observables, 2,t)
@@ -246,10 +252,14 @@ function forward_algorithm(observables::ObservableHist)
         scale[t] = sum(alpha[:, t])
         alpha[:, t] ./= scale[t]
         if t>N-5
+            println(" alpha[1, t-1]*T[1,1]: $(alpha[1, t-1]*T[1,1])")
+            println(" alpha[2, t-1]*T[2,1]: $(alpha[2, t-1]*T[2,1])")
+            println(" alpha[1, 1]: $(alpha[1, 1])")
+            println(" alpha[2, 1]: $(alpha[2, 1])")
             println("e1:$e1")
             println("e2:$e2")
-            println("alpha[1,t]: $(alpha[1, t])")
-            println("alpha[2,t]: $(alpha[2, t])")
+            println("alpha[1,$t]: $(alpha[1, t])")
+            println("alpha[2,$t]: $(alpha[2, t])")
             println("scale[t]: $(scale[t])")
             
 
