@@ -3,6 +3,7 @@ using Random
 using CairoMakie
 using Distributions
 using SMLMSim
+using SpecialFunctions
 
 
 
@@ -106,30 +107,31 @@ end
 
 
 
-function compute_free_density(o::ObservableHist,frame;sigma=0.2, dt=0.01)
+function compute_free_density(o::ObservableHist,frame;sigma=0.01, dt=0.01)
    
         dn = sqrt((o.observables.frames[frame].molecules[1].x - o.observables.frames[frame].molecules[2].x)^2 
         + (o.observables.frames[frame].molecules[1].y - o.observables.frames[frame].molecules[2].y)^2)
         println("\n dn free: $dn")
 
-        dn_1 = sqrt((o.observables.frames[frame+1].molecules[1].x - o.observables.frames[frame+1].molecules[2].x)^2 
-        + (o.observables.frames[frame+1].molecules[1].y - o.observables.frames[frame+1].molecules[2].y)^2)
+        dn_1 = sqrt((o.observables.frames[frame-1].molecules[1].x - o.observables.frames[frame-1].molecules[2].x)^2 
+        + (o.observables.frames[frame-1].molecules[1].y - o.observables.frames[frame-1].molecules[2].y)^2)
         println("\n dn-1 free: $dn_1")
-        density_val = (dn/sigma^2) *  (exp((-(dn^2) - (dn_1)^2))/sigma^2) * modified_bessel(dt, dn, dn_1,sigma)
+        density_val = (dn/sigma^2) *  (exp((-(dn^2) - (dn_1)^2))/sigma^2) * modified_bessel( dt,dn, dn_1,sigma)
 
         println("\nfreee density val: $density_val")
        
     return density_val
 end
 
-function compute_dimer_density(o::ObservableHist,frame;sigma=0.2, dt=0.01,)
+function compute_dimer_density(o::ObservableHist,frame;sigma=0.01, dt=0.01,)
     
     
     dn = sqrt((o.observables.frames[frame].molecules[1].x - o.observables.frames[frame].molecules[2].x)^2 
         + (o.observables.frames[frame].molecules[1].y - o.observables.frames[frame].molecules[2].y)^2)
 
 
-    density_val = ((dn)/sigma^2) *  exp((-(o.arguments.d_dimer^2) - (dn)^2)/sigma^2) *  modified_bessel(dt, o.arguments.r_react, dn, sigma)
+    density_val = ((dn)/sigma^2) *  exp((-(o.arguments.d_dimer^2) - (dn)^2)/sigma^2) *  modified_bessel( dt, o.arguments.r_react, dn, sigma)
+    println("\n dn dimer: $dn")
     println("\nfreee dimer density : $density_val")
     return density_val
 end
@@ -137,18 +139,78 @@ end
 
 
 function modified_bessel(dt, d1, d2, σ)
-    result = 0.0
+    result_me = 0.0
     
     x = (d1 * d2) / (σ^2)
     
     for θ in 0:dt:2*pi
-        result += exp(x * cos(θ))
+        result_me += exp(x * cos(θ))
     end
 
-    result *= dt / (2*pi)
-    
-    return result
+    result_me  *= dt / (2*pi)
+    #result_sp = besseli(0, x)
+
+    println("result besseel: $result_me")
+    println("x_beseel: $x")
+    #println("special using pack: $result_sp")
+    return result_me
 end
+
+function modified_bessel(d1, d2, σ; num_points=1000)
+    # Calculate x based on the provided formula
+    x = (d1 * d2) / (σ^2)
+    
+    # Handle special case
+    if x == 0
+        return 1.0
+    end
+    
+    # For numerical stability with large x values
+    if x > 700.0  # Approaching Float64 exp limit
+        # Use asymptotic approximation for large x
+        # I₀(x) ≈ e^x / sqrt(2πx) * (1 + terms) for large x
+        result_me = exp(x) / sqrt(2π * x) * (1.0 + 1.0/(8*x) - 9.0/(128*x^2))
+        println("result besseel: $result_me")
+        return result_me
+    end
+    
+    # For moderate x, use adaptive numerical integration
+    # Determine appropriate step size
+    dt = 2π / num_points
+    
+    # To avoid numerical instability, we'll compute log(result) and then exp
+    if x > 50.0
+        # For larger x, use log-domain calculation
+        log_max = x  # Maximum value of x·cos(θ) is x when cos(θ)=1
+        result_me = 0.0
+        
+        for i in 0:num_points-1
+            θ = i * dt
+            # Subtract log_max to avoid overflow
+            log_term = x * cos(θ) - log_max
+            result_me += exp(log_term)
+        end
+        
+        # Adjust for the log-domain calculation
+        result_me = log_max + log(result_me * dt / (2π))
+        println("result besseel: $result_me")
+        return exp(result_me)
+    else
+        
+        result_me = 0.0
+        
+        for i in 0:num_points-1
+            θ = i * dt
+            result_me += exp(x * cos(θ))
+        end
+        
+        result_me *= dt / (2π)
+        println("result besseel: $result_me")
+        return result_me
+    end
+end
+
+
 
 function forward_algorithm(observables::ObservableHist)
 
@@ -157,8 +219,8 @@ function forward_algorithm(observables::ObservableHist)
     scale = zeros(N)  
     
     
-    alpha[1, 1] = p_state(observables,1,1)
-    alpha[2, 1] = p_state(observables,2,1)
+    alpha[1, 1] = p_state(observables,1,2)
+    alpha[2, 1] = p_state(observables,2,2)
 
     println(" alpha[1, 1]: $(alpha[1, 1])")
     println(" alpha[2, 1]: $(alpha[2, 1])")
@@ -171,7 +233,7 @@ function forward_algorithm(observables::ObservableHist)
     T = [1-(k_on*Δt) k_on*Δt; 
     observables.arguments.k_off*Δt 1-(observables.arguments.k_off*Δt)]
 
-    for t in 2:N
+    for t in 3:N
        
         e1 = p_state(observables, 1,t)
         e2 = p_state(observables, 2,t)
@@ -260,6 +322,7 @@ function calculate_accuracy(alpha::Matrix{Float64}, actual_states::Vector{Int64}
 end
 
 
+Random.seed!(999)
 
 k12, k21 = 0.1, 0.1     
 Δt = 0.1               
