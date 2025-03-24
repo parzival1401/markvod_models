@@ -4,10 +4,9 @@ using CairoMakie
 using Distributions
 
 
-include("forward_alg.jl")
-#include("smm.jl")
+include("forwardv2.jl")
 
-
+ 
 
 
 function calc_accuracy(alpha::Matrix{Float64}, true_states::Vector{Int64})
@@ -15,24 +14,21 @@ function calc_accuracy(alpha::Matrix{Float64}, true_states::Vector{Int64})
     return mean(pred_states .== true_states)
 end
 
-function calc_nll(params, obs, dt, μ1, σ1, μ2, σ2)
+
+function calc_nll(params::Vector{Float64}, obs,dt)
     k12, k21 = params
     
     if any(k -> k < 0 || k > 1/dt, [k12, k21])
         return Inf
     end
     
-    T = [
-        1-k12*dt k12*dt
-        k21*dt 1-k21*dt
-    ]
     
-    _, ll = forward_algorithm(obs, T, μ1, σ1, μ2, σ2)
+    _, ll = forward_algorithm(obs,params)
     return -ll
 end
 
 
-function optimize(f, x0; args=(), max_iter=10000, tol=1e-8)
+function optimize(f, x0; args=(), max_iter=1000, tol=1e-8)
     n = length(x0)
     points = zeros(n + 1, n)
     f_vals = zeros(n + 1)
@@ -94,13 +90,13 @@ function optimize(f, x0; args=(), max_iter=10000, tol=1e-8)
 end
 
 
-function find_hmm_params(obs, dt, μ1, σ1, μ2, σ2; n_tries=100)
+function find_hmm_params(obs,dt; n_tries=1000)
     best_params = zeros(2)
     best_nll = Inf
     
     for _ in 1:n_tries
         guess = rand(2) .* (1/dt)
-        params, nll = optimize(p -> calc_nll(p, obs, dt, μ1, σ1, μ2, σ2), guess)
+        params, nll = optimize(p -> calc_nll(p, obs, dt), guess)
         
         if nll < best_nll
             best_nll = nll
@@ -110,28 +106,4 @@ function find_hmm_params(obs, dt, μ1, σ1, μ2, σ2; n_tries=100)
     
     return best_params, best_nll
 end
-
-
-
-#Random.seed!(123)
-
-dt = 0.1
-n_samples = 10000
-μ1, σ1 = 1.0, 2
-μ2, σ2 = 2.0, 2
-true_k12, true_k21 = 0.1, 0.1
-
-states, obs, actual, T = simulate_hmm(true_k12, true_k21, dt, n_samples, μ1, σ1, μ2, σ2)
-params, nll = find_hmm_params(obs, dt, μ1, σ1, μ2, σ2)
-k12, k21 = params
-
-T_opt = [1-k12*dt k12*dt; k21*dt 1-k21*dt]
-alpha, ll = forward_algorithm(obs, T_opt, μ1, σ1, μ2, σ2)
-accuracy = calc_accuracy(alpha, actual)
-
-println("True parameters: k12 = $true_k12, k21 = $true_k21")
-println("Optimized parameters: k12 = $(round(k12, digits=3)), k21 = $(round(k21, digits=3))")
-println("Log-likelihood: $(round(ll, digits=3))")
-println("Accuracy: $(round(accuracy * 100, digits=2))%")
-
 

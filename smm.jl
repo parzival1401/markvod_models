@@ -3,13 +3,14 @@ using SMLMSim
 using CairoMakie
 using Random
 
-function run_simulation(;density=0.01, t_max=25, box_size=10, k_off=0.3, r_react=2,save=false)
+function run_simulation(;density=0.01, t_max=25, box_size=10, k_off=0.3, r_react=2,save=false,boundary="reflecting")
     state_history, args = SMLMSim.InteractionDiffusion.smoluchowski(density=density,
         t_max=t_max, 
         box_size=box_size,
         k_off=k_off,
-        r_react=r_react
-    )
+        r_react=r_react, ## reflection mode 
+        boundary=boundary
+        )
     dimer_history = SMLMSim.get_dimers(state_history)
     if save == true 
     SMLMSim.gen_movie(state_history,args; filename="defaultsim.mp4")
@@ -102,7 +103,7 @@ end
 Random.seed!(999)
 
 # Run simulation and get data
-state_history, args, dimer_history = run_simulation(box_size=15,save=false)
+state_history, args, dimer_history = run_simulation(box_size=15,save=true);
 p1x, p1y, p1s, p2x, p2y, p2s = extract_particle_trajectories(state_history)
 distance_x, distance_y = calculate_distances(p1x, p1y, p2x, p2y)
 

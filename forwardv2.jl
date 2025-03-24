@@ -24,13 +24,14 @@ struct ObservableHist <: Abstract_obs
     dimer_history::SMLMSim.InteractionDiffusion.MoleculeHistory
 end 
 
-function run_simulation(;density=0.02, t_max=25, box_size=10, k_off=0.3, r_react=2)
+function run_simulation(;density=0.02, t_max=25, box_size=10, k_off=0.3, r_react=2,boundary="reflecting")
    result = SMLMSim.InteractionDiffusion.smoluchowski(
         density=density,
         t_max=t_max, 
         box_size=box_size,
         k_off=k_off,
-        r_react=r_react
+        r_react=r_react,
+        boundary=boundary
     )
     state_history = result[1]
     args = result[2]
@@ -92,7 +93,7 @@ function p_state(o:: Gaus2state,frame;μ=0, σ=1)
 end 
  
 
-function p_state(o::ObservableHist, state,frame;  sigma=1, dt=0.01,)
+function p_state(o::ObservableHist, state,frame;  sigma=0.1, dt=0.01,)
     
     if state == 1
         return compute_free_density(o, frame,sigma=sigma, dt=dt)
@@ -107,32 +108,80 @@ end
 
 
 
-function compute_free_density(o::ObservableHist,frame;sigma=1, dt=0.01)
+function compute_free_density(o::ObservableHist,frame;sigma=0.1, dt=0.01)
    
-        dn = sqrt((o.observables.frames[frame].molecules[1].x - o.observables.frames[frame].molecules[2].x)^2 
-        + (o.observables.frames[frame].molecules[1].y - o.observables.frames[frame].molecules[2].y)^2)
-        println("\n dn free: $dn")
 
-        dn_1 = sqrt((o.observables.frames[frame-1].molecules[1].x - o.observables.frames[frame-1].molecules[2].x)^2 
-        + (o.observables.frames[frame-1].molecules[1].y - o.observables.frames[frame-1].molecules[2].y)^2)
+    Δxn = o.observables.frames[frame].molecules[1].x - o.observables.frames[frame].molecules[2].x
+    Δyn = o.observables.frames[frame].molecules[1].y - o.observables.frames[frame].molecules[2].y
+
+    Δxn_1 = o.observables.frames[frame-1].molecules[1].x - o.observables.frames[frame-1].molecules[2].x
+    Δyn_1 = o.observables.frames[frame-1].molecules[1].y - o.observables.frames[frame-1].molecules[2].y
+
+    Δxn_2 = o.observables.frames[frame-2].molecules[1].x - o.observables.frames[frame-2].molecules[2].x
+    Δyn_2 = o.observables.frames[frame-2].molecules[1].y - o.observables.frames[frame-2].molecules[2].y
+
+    Δx = Δxn - Δxn_1
+    Δy = Δyn - Δyn_1
+
+    Δx_1 = Δxn_1 - Δxn_2
+    Δy_1 = Δyn_1 - Δyn_2
+   
+    dn_1square = (Δx_1^2)+(Δy_1^2)
+    dn_1 = sqrt(dn_1square)
+    dn_square = (Δx^2)+(Δy^2)
+    dn= sqrt(dn_square)
+
+
+
+        
         println("\n dn-1 free: $dn_1")
-        density_val = (dn/sigma^2) *  (exp((-(dn^2) - (dn_1)^2)/sigma^2)) * modified_bessel( dt,dn, dn_1,sigma)
+        println("\n dn free: $dn")
+        density_val = (dn/sigma^2) *  (exp((-(dn_square) - (dn_1square))/sigma^2)) * modified_bessel( dt,dn, dn_1,sigma)
 
         println("\nfreee density val: $density_val")
+        if density_val == Inf || isnan(density_val)|| density_val==0
+            density_val = 0
+            for θ in 0:dt:2*pi
+                density_val += exp(-((dn_square)+(dn_1square)-(2*dn*dn_1*cos(θ)))/(2*sigma^2))
+            end 
+
+            density_val *= (dn/sigma^2)*dt
+            println("\n whole integral value density free: $density_val")
+        end 
+
+       
        
     return density_val
 end
 
-function compute_dimer_density(o::ObservableHist,frame;sigma=1, dt=0.01,)
+function compute_dimer_density(o::ObservableHist,frame;sigma=0.1, dt=0.01,)
     
     
-    dn = sqrt((o.observables.frames[frame].molecules[1].x - o.observables.frames[frame].molecules[2].x)^2 
-        + (o.observables.frames[frame].molecules[1].y - o.observables.frames[frame].molecules[2].y)^2)
+    Δxn = o.observables.frames[frame].molecules[1].x - o.observables.frames[frame].molecules[2].x
+    Δyn = o.observables.frames[frame].molecules[1].y - o.observables.frames[frame].molecules[2].y
+
+    Δxn_1 = o.observables.frames[frame-1].molecules[1].x - o.observables.frames[frame-1].molecules[2].x
+    Δyn_1 = o.observables.frames[frame-1].molecules[1].y - o.observables.frames[frame-1].molecules[2].y
+
+    Δx= Δxn-Δxn_1
+    Δy= Δyn-Δyn_1
+
+    dn_square = (Δx^2)+(Δy^2)
+    dn= sqrt(dn_square)
 
 
-    density_val = ((dn)/sigma^2) *  exp((-(o.arguments.d_dimer^2) - (dn)^2)/sigma^2) *  modified_bessel( dt, o.arguments.r_react, dn, sigma)
-    println("\n dn dimer: $dn")
-    println("\nfreee dimer density : $density_val")
+    density_val = (dn/sigma^2) *  exp((-(o.arguments.d_dimer^2) - (dn_square)/sigma^2)) *  modified_bessel( dt, o.arguments.d_dimer, dn, sigma)
+
+    println("\n   value density dimer : $density_val")
+    if density_val == Inf || isnan(density_val)|| density_val==0
+        density_val = 0
+        for θ in 0:dt:2*pi
+            density_val += exp(-((dn_square)+(o.arguments.d_dimer^2)-(2*dn*o.arguments.d_dimer*cos(θ)))/(2*sigma^2))
+        end 
+
+        density_val *= (dn/sigma^2)*dt
+        println("\n whole integral value density dimer : $density_val")
+    end 
     return density_val
 end
 
@@ -140,11 +189,6 @@ end
 
 function modified_bessel(dt, d1, d2, σ)
     result_me = 0.0
-    @printf "d1 = %e\n" d1
-    @printf "d2 = %e\n" d2
-    @printf "σ = %e\n" σ
-    @printf "σ² = %e\n" σ^2
-    @printf "d1 * d2 = %e\n" (d1 * d2)
 
     x = (d1*d2)/(σ^2)
 
@@ -155,79 +199,25 @@ function modified_bessel(dt, d1, d2, σ)
     end
 
     result_me  *= dt / (2*pi)
-    #result_sp = besseli(0, x)
+    result_sp = besseli(0, x)
 
     println("result besseel: $result_me")
     
-    #println("special using pack: $result_sp")
-    return result_me
-end
-
-function modified_bessel(d1, d2, σ; num_points=1000)
-    # Calculate x based on the provided formula
-    x = (d1 * d2) / (σ^2)
-    
-    # Handle special case
-    if x == 0
-        return 1.0
-    end
-    
-    # For numerical stability with large x values
-    if x > 700.0  # Approaching Float64 exp limit
-        # Use asymptotic approximation for large x
-        # I₀(x) ≈ e^x / sqrt(2πx) * (1 + terms) for large x
-        result_me = exp(x) / sqrt(2π * x) * (1.0 + 1.0/(8*x) - 9.0/(128*x^2))
-        println("result besseel: $result_me")
-        return result_me
-    end
-    
-    # For moderate x, use adaptive numerical integration
-    # Determine appropriate step size
-    dt = 2π / num_points
-    
-    # To avoid numerical instability, we'll compute log(result) and then exp
-    if x > 50.0
-        # For larger x, use log-domain calculation
-        log_max = x  # Maximum value of x·cos(θ) is x when cos(θ)=1
-        result_me = 0.0
-        
-        for i in 0:num_points-1
-            θ = i * dt
-            # Subtract log_max to avoid overflow
-            log_term = x * cos(θ) - log_max
-            result_me += exp(log_term)
-        end
-        
-        # Adjust for the log-domain calculation
-        result_me = log_max + log(result_me * dt / (2π))
-        println("result besseel: $result_me")
-        return exp(result_me)
-    else
-        
-        result_me = 0.0
-        
-        for i in 0:num_points-1
-            θ = i * dt
-            result_me += exp(x * cos(θ))
-        end
-        
-        result_me *= dt / (2π)
-        println("result besseel: $result_me")
-        return result_me
-    end
+    println("special using pack: $result_sp")
+    return result_sp
 end
 
 
 
-function forward_algorithm(observables::ObservableHist)
+function forward_algorithm(observables::ObservableHist, param::Vector{Float64})
 
     N = length(observables.observables.frames)-1
     alpha = zeros(2, N)
     scale = zeros(N)  
     
     
-    alpha[1, 1] = p_state(observables,1,2)
-    alpha[2, 1] = p_state(observables,2,2)
+    alpha[1, 1] = p_state(observables,1,3)
+    alpha[2, 1] = p_state(observables,2,3)
 
     
     scale[1] = sum(alpha[:, 1])
@@ -235,15 +225,17 @@ function forward_algorithm(observables::ObservableHist)
 
     Δt=observables.arguments.dt
 
-    k_on=0.1
+    k_on=param[1]
+    k_off=param[2]
     T = [1-(k_on*Δt) k_on*Δt; 
-    observables.arguments.k_off*Δt 1-(observables.arguments.k_off*Δt)]
+            k_off*Δt 1-(k_off*Δt)]
 
     for t in 2:N
-       
-        e1 = p_state(observables, 1,t)
-        e2 = p_state(observables, 2,t)
-        
+       frames = 4 
+        e1 = p_state(observables, 1,frames)
+        e2 = p_state(observables, 2,frames)
+        println("e1: $e1")
+        println("e2: $e2")
         
         alpha[1, t] = (alpha[1, t-1]*T[1,1] + alpha[2, t-1]*T[2,1]) * e1
         alpha[2, t] = (alpha[1, t-1]*T[1,2] + alpha[2, t-1]*T[2,2]) * e2
@@ -251,19 +243,7 @@ function forward_algorithm(observables::ObservableHist)
         
         scale[t] = sum(alpha[:, t])
         alpha[:, t] ./= scale[t]
-        if t>N-5
-            println(" alpha[1, t-1]*T[1,1]: $(alpha[1, t-1]*T[1,1])")
-            println(" alpha[2, t-1]*T[2,1]: $(alpha[2, t-1]*T[2,1])")
-            println(" alpha[1, 1]: $(alpha[1, 1])")
-            println(" alpha[2, 1]: $(alpha[2, 1])")
-            println("e1:$e1")
-            println("e2:$e2")
-            println("alpha[1,$t]: $(alpha[1, t])")
-            println("alpha[2,$t]: $(alpha[2, t])")
-            println("scale[t]: $(scale[t])")
-            
-
-        end 
+        frames +=1
     end
     
     
@@ -331,8 +311,26 @@ function calculate_accuracy(alpha::Matrix{Float64}, actual_states::Vector{Int64}
     return accuracy
 end
 
+function add_position_noise(simulation::ObservableHist, sigma=0.1)
+    noisy_frames = deepcopy(simulation.observables.frames)
+    
+    for i in 1:length(noisy_frames)
+        frame = noisy_frames[i]
+        for j in 1:length(frame.molecules)
+            frame.molecules[j].x += sigma * randn()
+            frame.molecules[j].y += sigma * randn()
+        end
+    end
 
-Random.seed!(999)
+    dt = simulation.arguments.dt
+    noisy_history = SMLMSim.InteractionDiffusion.MoleculeHistory(dt, noisy_frames)
+    noisy_dimer_history = SMLMSim.get_dimers(noisy_history)
+    
+    return ObservableHist(noisy_history, simulation.arguments, noisy_dimer_history)
+end
+#=
+
+Random.seed!(8765311)
 
 k12, k21 = 0.1, 0.1     
 Δt = 0.1               
@@ -346,23 +344,26 @@ states, obs, act_states, T = simulate_hmm(k12, k21, Δt, sz, μ1, σ1, μ2, σ2)
 observables = Gaus2state(states, obs, act_states, T)
 
 simulation = run_simulation()
+noisy_simulation = add_position_noise(simulation, 0.1)
 
-alpha_1, loglik_1 = forward_algorithm(simulation)
-
-
-alpha, loglik = forward_algorithm(observables, T, μ1, σ1, μ2, σ2)
-actual_states=[]
-
-for i in 1:length(simulation.observables.frames)-1
+alpha_1, loglik_1 = forward_algorithm(simulation,[0.1,simulation.arguments.k_off])
+alpha_2, loglik_2 = forward_algorithm(noisy_simulation,[0.1,simulation.arguments.k_off])
+actual_states_noise=[]
+actual_states = []
+for i in 1:length(noisy_simulation.observables.frames)-1
     push!(actual_states, simulation.observables.frames[i].molecules[1].state)     
+    push!(actual_states_noise, noisy_simulation.observables.frames[i].molecules[1].state)
 end
 
+actual_states_int = Int64.(actual_states)
+actual_states_noise_int = Int64.(actual_states_noise)
+accuracy = calculate_accuracy(alpha_1, actual_states_int)
+acurracy_noise = calculate_accuracy(alpha_2, actual_states_noise_int)
+println("\nObservable History model accuracy: $(round(accuracy * 100, digits=2))%")
+println("\nNoisy Observable History model accuracy: $(round(acurracy_noise * 100, digits=2))%")
 
+alpha, loglik = forward_algorithm(observables, T, μ1, σ1, μ2, σ2)
 accuracy_gaus = calculate_accuracy(alpha, act_states)
 println("\nGaussian 2-state model accuracy: $(round(accuracy_gaus * 100, digits=2))%")
 
-actual_states_int = Int64.(actual_states)
-accuracy_obs = calculate_accuracy(alpha_1, actual_states_int)
-println("\nObservable History model accuracy: $(round(accuracy_obs * 100, digits=2))%")
-
-
+=#
