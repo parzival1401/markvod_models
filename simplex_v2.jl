@@ -15,7 +15,7 @@ function calc_accuracy(alpha::Matrix{Float64}, true_states::Vector{Int64})
 end
 
 
-function calc_nll(params::Vector{Float64}, obs,dt)
+function calc_nll(params::Vector{Float64}, obs::ObservableHist,dt)
     k12, k21 = params
     
     if any(k -> k < 0 || k > 1/dt, [k12, k21])
@@ -24,6 +24,7 @@ function calc_nll(params::Vector{Float64}, obs,dt)
     
     
     _, ll = forward_algorithm(obs,params)
+    
     return -ll
 end
 
@@ -90,14 +91,19 @@ function optimize(f, x0; args=(), max_iter=1000, tol=1e-8)
 end
 
 
-function find_hmm_params(obs,dt; n_tries=1000)
+function find_hmm_params(obs::ObservableHist,dt; n_tries=2)
     best_params = zeros(2)
     best_nll = Inf
     
-    for _ in 1:n_tries
-        guess = rand(2) .* (1/dt)
+    for i in 1:n_tries
+        if i == 1
+            guess = [1/obs.arguments.t_max,obs.arguments.k_off]
+        else
+            guess = rand(2) .* (1/dt)
+        end
+        println("guess: $guess")
         params, nll = optimize(p -> calc_nll(p, obs, dt), guess)
-        
+        println("params: $params ,  nll: $nll"  )
         if nll < best_nll
             best_nll = nll
             best_params = params
@@ -106,4 +112,25 @@ function find_hmm_params(obs,dt; n_tries=1000)
     
     return best_params, best_nll
 end
+
+###############
+
+simulation = run_simulation()
+noisy_simulation = add_position_noise(simulation, 0.1)
+params, nll = find_hmm_params(simulation,noisy_simulation.arguments.dt)
+
+
+alpha_2, loglik_2 = forward_algorithm(noisy_simulation,params)
+actual_states_noise=[]
+actual_states = []
+for i in 1:length(noisy_simulation.observables.frames)-1
+    push!(actual_states_noise, noisy_simulation.observables.frames[i].molecules[1].state)
+end
+
+actual_states_int = Int64.(actual_states)
+actual_states_noise_int = Int64.(actual_states_noise)
+acurracy_noise = calculate_accuracy(alpha_2, actual_states_noise_int)
+println("\nNoisy Observable History model accuracy: $(round(acurracy_noise * 100, digits=2))%")
+
+
 

@@ -81,6 +81,7 @@ function forward_algorithm(observations, T, μ1, σ1, μ2, σ2)
     
     
     loglikelihood = sum(log.(scale))
+    println("Log-likelihood: ", loglikelihood)
     
     return alpha, loglikelihood
 end

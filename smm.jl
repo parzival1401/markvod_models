@@ -3,7 +3,7 @@ using SMLMSim
 using CairoMakie
 using Random
 
-function run_simulation(;density=0.01, t_max=25, box_size=10, k_off=0.3, r_react=2,save=false,boundary="reflecting")
+function run_simulation(;density=0.01, t_max=50, box_size=10, k_off=0.5, r_react=4,save=false,boundary="reflecting")
     state_history, args = SMLMSim.InteractionDiffusion.smoluchowski(density=density,
         t_max=t_max, 
         box_size=box_size,
@@ -100,10 +100,10 @@ function compute_density(d1, d2, σ)
     return (d1/σ^2) * exp((-(d2^2) - (d1^2))/σ^2) * modified_bessel(0.01, d2, d1, σ)
 end
 
-Random.seed!(999)
+Random.seed!(1234)
 
 # Run simulation and get data
-state_history, args, dimer_history = run_simulation(box_size=15,save=true);
+state_history, args, dimer_history = run_simulation(box_size=15,save=true,k_off=0.5);
 p1x, p1y, p1s, p2x, p2y, p2s = extract_particle_trajectories(state_history)
 distance_x, distance_y = calculate_distances(p1x, p1y, p2x, p2y)
 

@@ -110,7 +110,7 @@ end
 
 function compute_free_density(o::ObservableHist,frame;sigma=0.1, dt=0.01)
    
-
+#=
     Δxn = o.observables.frames[frame].molecules[1].x - o.observables.frames[frame].molecules[2].x
     Δyn = o.observables.frames[frame].molecules[1].y - o.observables.frames[frame].molecules[2].y
 
@@ -130,24 +130,33 @@ function compute_free_density(o::ObservableHist,frame;sigma=0.1, dt=0.01)
     dn_1 = sqrt(dn_1square)
     dn_square = (Δx^2)+(Δy^2)
     dn= sqrt(dn_square)
+=#
+    Δxn = o.observables.frames[frame].molecules[1].x - o.observables.frames[frame].molecules[2].x
+    Δyn = o.observables.frames[frame].molecules[1].y - o.observables.frames[frame].molecules[2].y
+    Δxn_1 = o.observables.frames[frame-1].molecules[1].x - o.observables.frames[frame-1].molecules[2].x
+    Δyn_1 = o.observables.frames[frame-1].molecules[1].y - o.observables.frames[frame-1].molecules[2].y
 
+    dn_1square = (Δxn_1^2)+(Δyn_1^2)
+    dn_1 = sqrt(dn_1square)
+    dn_square = (Δxn^2)+(Δyn^2)
+    dn= sqrt(dn_square)
 
 
         
-        println("\n dn-1 free: $dn_1")
-        println("\n dn free: $dn")
-        density_val = (dn/sigma^2) *  (exp((-(dn_square) - (dn_1square))/sigma^2)) * modified_bessel( dt,dn, dn_1,sigma)
+    #println("\n dn-1 free: $dn_1")
+    #println("\n dn free: $dn")
+    density_val = (dn/sigma^2) *  (exp((-(dn_square) - (dn_1square))/sigma^2)) * modified_bessel( dt,dn, dn_1,sigma)
 
-        println("\nfreee density val: $density_val")
-        if density_val == Inf || isnan(density_val)|| density_val==0
-            density_val = 0
-            for θ in 0:dt:2*pi
-                density_val += exp(-((dn_square)+(dn_1square)-(2*dn*dn_1*cos(θ)))/(2*sigma^2))
-            end 
-
-            density_val *= (dn/sigma^2)*dt
-            println("\n whole integral value density free: $density_val")
+    #println("\nfreee density val: $density_val")
+    if density_val == Inf || isnan(density_val)|| density_val==0
+        density_val = 0
+        for θ in 0:dt:2*pi
+            density_val += exp(-((dn_square)+(dn_1square)-(2*dn*dn_1*cos(θ)))/(2*sigma^2))
         end 
+
+        density_val *= (dn/sigma^2)*dt
+        #println("\n whole integral value density free: $density_val")
+    end 
 
        
        
@@ -156,7 +165,7 @@ end
 
 function compute_dimer_density(o::ObservableHist,frame;sigma=0.1, dt=0.01,)
     
-    
+   #= 
     Δxn = o.observables.frames[frame].molecules[1].x - o.observables.frames[frame].molecules[2].x
     Δyn = o.observables.frames[frame].molecules[1].y - o.observables.frames[frame].molecules[2].y
 
@@ -167,12 +176,15 @@ function compute_dimer_density(o::ObservableHist,frame;sigma=0.1, dt=0.01,)
     Δy= Δyn-Δyn_1
 
     dn_square = (Δx^2)+(Δy^2)
+    dn= sqrt(dn_square)=#
+    Δxn = o.observables.frames[frame].molecules[1].x - o.observables.frames[frame].molecules[2].x
+    Δyn = o.observables.frames[frame].molecules[1].y - o.observables.frames[frame].molecules[2].y
+    dn_square = (Δxn^2)+(Δyn^2)
     dn= sqrt(dn_square)
-
 
     density_val = (dn/sigma^2) *  exp((-(o.arguments.d_dimer^2) - (dn_square)/sigma^2)) *  modified_bessel( dt, o.arguments.d_dimer, dn, sigma)
 
-    println("\n   value density dimer : $density_val")
+    #println("\n   value density dimer : $density_val")
     if density_val == Inf || isnan(density_val)|| density_val==0
         density_val = 0
         for θ in 0:dt:2*pi
@@ -180,7 +192,7 @@ function compute_dimer_density(o::ObservableHist,frame;sigma=0.1, dt=0.01,)
         end 
 
         density_val *= (dn/sigma^2)*dt
-        println("\n whole integral value density dimer : $density_val")
+        #println("\n whole integral value density dimer : $density_val")
     end 
     return density_val
 end
@@ -192,19 +204,19 @@ function modified_bessel(dt, d1, d2, σ)
 
     x = (d1*d2)/(σ^2)
 
-    println("\nx_beseel: $x")
+    #println("\nx_beseel: $x")
 
     for θ in 0:dt:2*pi
         result_me += exp(x * cos(θ))
     end
 
     result_me  *= dt / (2*pi)
-    result_sp = besseli(0, x)
+    #result_sp = besseli(0, x)
 
-    println("result besseel: $result_me")
+    #println("result besseel: $result_me")
     
-    println("special using pack: $result_sp")
-    return result_sp
+    #println("special using pack: $result_sp")
+    return result_me 
 end
 
 
@@ -216,8 +228,8 @@ function forward_algorithm(observables::ObservableHist, param::Vector{Float64})
     scale = zeros(N)  
     
     
-    alpha[1, 1] = p_state(observables,1,3)
-    alpha[2, 1] = p_state(observables,2,3)
+    alpha[1, 1] = p_state(observables,1,2)
+    alpha[2, 1] = p_state(observables,2,2)
 
     
     scale[1] = sum(alpha[:, 1])
@@ -234,8 +246,8 @@ function forward_algorithm(observables::ObservableHist, param::Vector{Float64})
        frames = 4 
         e1 = p_state(observables, 1,frames)
         e2 = p_state(observables, 2,frames)
-        println("e1: $e1")
-        println("e2: $e2")
+        #println("e1: $e1")
+        #println("e2: $e2")
         
         alpha[1, t] = (alpha[1, t-1]*T[1,1] + alpha[2, t-1]*T[2,1]) * e1
         alpha[2, t] = (alpha[1, t-1]*T[1,2] + alpha[2, t-1]*T[2,2]) * e2
@@ -286,6 +298,7 @@ function forward_algorithm(observations::Gaus2state, T, μ1, σ1, μ2, σ2)
     
     
     loglikelihood = sum(log.(scale))
+    println("loglikelihood: $loglikelihood")
     
     return alpha, loglikelihood
 end
@@ -365,5 +378,34 @@ println("\nNoisy Observable History model accuracy: $(round(acurracy_noise * 100
 alpha, loglik = forward_algorithm(observables, T, μ1, σ1, μ2, σ2)
 accuracy_gaus = calculate_accuracy(alpha, act_states)
 println("\nGaussian 2-state model accuracy: $(round(accuracy_gaus * 100, digits=2))%")
+
+
+
+
+
+
+
+density_val = 0
+dn = 11.10865
+dn_square = dn^2
+dn_1 =11.444445
+dn_1square = dn_1^2
+
+dl = 0.05
+dl_square = dl^2
+sigma = 0.1
+
+        for θ in 0:0.1:2*pi
+            density_val += exp(-((dn_square)+(dn_1square)-(2*dn*dn_1*cos(θ)))/(2*sigma^2))
+        end 
+
+        density_val *= (dn/sigma^2)*0.1
+density_val = 0
+
+        for θ in 0:0.1:2*pi
+            density_val += exp(-((dn_square)+(dl_square)-(2*dn*dl*cos(θ)))/(2*sigma^2))
+        end 
+
+        density_val *= (dn/sigma^2)*0.1
 
 =#

@@ -101,7 +101,8 @@ function find_hmm_params(obs, dt, μ1, σ1, μ2, σ2; n_tries=100)
     for _ in 1:n_tries
         guess = rand(2) .* (1/dt)
         params, nll = optimize(p -> calc_nll(p, obs, dt, μ1, σ1, μ2, σ2), guess)
-        
+        println("params: ", params)
+        println("nll: ", nll)
         if nll < best_nll
             best_nll = nll
             best_params = params
