@@ -1,7 +1,9 @@
 using Random
 using CairoMakie
 
-function simulate_markov_with_changes(k12, k21, state_changes=10,Δt = 0.1; max_steps=100000)
+
+
+function simulate_states(k12, k21, state_changes=10,Δt = 0.1; max_steps=100000)
     
    
     p12 = k12 * Δt
@@ -47,23 +49,37 @@ function simulate_markov_with_changes(k12, k21, state_changes=10,Δt = 0.1; max_
     return states, steps
 end
 
+function get_state_transitions(states::Vector{Int})
+    transitions = []
+    for i in 2:length(states)
+        if states[i] != states[i - 1]
+            t = (i - 1) 
+            from_state = states[i - 1]
+            to_state = states[i]
+            push!(transitions, (time = t, from = from_state, to = to_state))
+        end
+    end
+    return transitions
+end
 
-k12 = 0.1 
-k21 = 0.005 
-states, steps = simulate_markov_with_changes(k12, k21, 6)
+
+k12 = 0.5
+k21 = 0.15 
+states, steps = simulate_states(k12, k21, 6)
+transitions = get_state_transitions(states)
+
+for tr in transitions
+    println("At t = $(tr.time): State changed from $(tr.from) → $(tr.to)")
+end
 
 println("Simulation completed with $(length(states)) time points and $steps steps")
 println("Number of state changes: $(sum(abs.(diff(states))))")
 
 fig = Figure(size=(800, 400))
-ax = Axis(fig[1, 1], 
-    xlabel="Time Steps", 
-    ylabel="State",
-    title="Two-State Markov Chain with k12=$k12, k21=$k21"
-)
+ax = Axis(fig[1, 1],  xlabel="Time Steps",  ylabel="State", title="Two-State Markov Chain with k12=$k12, k21=$k21")
 
 
 lines!(ax, 1:length(states), states, color=:blue, linewidth=1.5)
 
-
+save("markov_chain_simulation.png", fig)
 display(fig)
