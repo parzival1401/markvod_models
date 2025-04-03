@@ -81,5 +81,5 @@ ax = Axis(fig[1, 1],  xlabel="Time Steps",  ylabel="State", title="Two-State Mar
 
 lines!(ax, 1:length(states), states, color=:blue, linewidth=1.5)
 
-save("markov_chain_simulation.png", fig)
+save("generated_data/markov_chain_simulation.png", fig)
 display(fig)
