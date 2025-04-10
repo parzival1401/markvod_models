@@ -11,7 +11,7 @@ function constrained_diffusion(;
     animate = false,
     filename = "constrained_diffusion.mp4",
     framerate = 30
-)
+ )
     # Initialize particle 1 position
     if isnothing(initial_p1)
         p1_pos = rand(2) .* (box - 2r) .+ r
@@ -45,6 +45,8 @@ function constrained_diffusion(;
         # Create particles
         s1 = scatter!(ax, [p1_pos[1]], [p1_pos[2]], color=:blue, markersize=15)
         s2 = scatter!(ax, [p2_pos[1]], [p2_pos[2]], color=:red, markersize=15)
+        
+    
         
         # Record animation
         record(fig, filename, 1:steps; framerate = framerate) do frame
@@ -133,5 +135,6 @@ function constrained_diffusion(;
     end
     
     return p1_positions, p2_positions
-end
-## p1_path, p2_path = constrained_diffusion(initial_p1 = nothing, D = 0.01, r = 0.01, box = 1.0, dt = 0.016, steps = 500, animate = true)
+ end
+
+# p1,p2 = constrained_diffusion(initial_p1 = nothing, D = 0.01,r = 0.01,box = 1.0,dt = 0.016,steps = 500,animate = true)

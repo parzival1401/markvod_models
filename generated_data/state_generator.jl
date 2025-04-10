@@ -56,12 +56,12 @@ function get_state_transitions(states::Vector{Int})
             t = (i - 1) 
             from_state = states[i - 1]
             to_state = states[i]
-            push!(transitions, (time = t, from = from_state, to = to_state))
+            push!(transitions, ( t, from_state, to_state))
         end
     end
     return transitions
 end
-
+#=
 
 k12 = 0.5
 k21 = 0.15 
@@ -83,3 +83,5 @@ lines!(ax, 1:length(states), states, color=:blue, linewidth=1.5)
 
 save("generated_data/markov_chain_simulation.png", fig)
 display(fig)
+
+=#
