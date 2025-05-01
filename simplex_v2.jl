@@ -2,8 +2,7 @@ using LinearAlgebra
 using Random
 using CairoMakie
 using Distributions
-
-
+using Optim
 include("forwardv2.jl")
 
  
@@ -29,7 +28,7 @@ function calc_nll(params::Vector{Float64}, obs::ObservableHist,dt)
 end
 
 
-function optimize(f, x0; args=(), max_iter=1000, tol=1e-8)
+function optimize_param(f, x0; args=(), max_iter=1000, tol=1e-8)
     n = length(x0)
     points = zeros(n + 1, n)
     f_vals = zeros(n + 1)
@@ -98,11 +97,11 @@ function find_hmm_params(obs::ObservableHist,dt; n_tries=2)
     for i in 1:n_tries
         if i == 1
             guess = [1/obs.arguments.t_max,obs.arguments.k_off]
-        else
-            guess = rand(2) .* (1/dt)
+            
         end
-        println("guess: $guess")
-        params, nll = optimize(p -> calc_nll(p, obs, dt), guess)
+        guess = rand(2) .* (1/dt)
+        #println("guess: $guess")
+        params, nll = optimize_param(p -> calc_nll(p, obs, dt), guess)
         println("params: $params ,  nll: $nll"  )
         if nll < best_nll
             best_nll = nll
@@ -113,14 +112,35 @@ function find_hmm_params(obs::ObservableHist,dt; n_tries=2)
     return best_params, best_nll
 end
 
+function objective_hmm(params, sim=noisy_simulation)
+   
+    if any(p -> p < 0, params)
+        return Inf 
+    end
+    
+    _, log_likelihood = forward_algorithm(sim, params)
+    
+    
+    return -log_likelihood
+end
 ###############
 
 simulation = run_simulation()
 noisy_simulation = add_position_noise(simulation, 0.1)
 params, nll = find_hmm_params(simulation,noisy_simulation.arguments.dt)
-
-
 alpha_2, loglik_2 = forward_algorithm(noisy_simulation,params)
+
+gues = [.5,.5]
+
+
+opt = optimize(objective_hmm, gues, NelderMead())
+param_opt = opt.minimizer
+alpha1, loglik1 = forward_algorithm(noisy_simulation, param_opt)
+println("Optimized parameters: $(param_opt)")
+
+
+
+
 actual_states_noise=[]
 actual_states = []
 for i in 1:length(noisy_simulation.observables.frames)-1
@@ -130,7 +150,9 @@ end
 actual_states_int = Int64.(actual_states)
 actual_states_noise_int = Int64.(actual_states_noise)
 acurracy_noise = calculate_accuracy(alpha_2, actual_states_noise_int)
+acurracy_optim = calculate_accuracy(alpha1, actual_states_noise_int)
 println("\nNoisy Observable History model accuracy: $(round(acurracy_noise * 100, digits=2))%")
+println("Optimized Observable History model accuracy: $(round(acurracy_optim * 100, digits=2))%")
 
 
 
