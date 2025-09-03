@@ -65,4 +65,3 @@ function constrained_diffusion(; initial_p1 = nothing,D = 0.01,r = 0.2,box = 1.0
     
     return p1_positions, p2_positions
 end
-## p1_path, p2_path = constrained_diffusion(initial_p1 = nothing, D = 0.01, r = 0.01, box = 1.0, dt = 0.016, steps = 500, animate = true)
