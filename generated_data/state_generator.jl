@@ -177,67 +177,32 @@ function time_sequence_with_split(states::Vector{Int})
     
     return sections
 end
-# Custom type integration - Include these when working with simulation types
-# include("types/types_with_data.jl")
 
-# Function to extract state sequence from custom simulation type
-function get_state_sequence(sim::simulation)
-    # For now, return the stored k_states as a placeholder
-    # In a full implementation, this would reconstruct the state sequence
-    # from particle proximity or other criteria
-    return [1, 2, 1, 2, 1]  # Placeholder - would need actual state reconstruction logic
+
+
+#=
+k12 = 0.5
+k21 = 0.15 
+states, steps = simulate_states(k12, k21, 6)
+transitions = get_state_transitions(states)
+time_in_state = time_sequence(states)
+sections = divide_into_sections(time_in_state, 3)
+
+split= time_sequence_with_split(states)
+
+for tr in transitions
+    println("At t = $(tr.time): State changed from $(tr.from) → $(tr.to)")
 end
 
-# Function to analyze state transitions from simulation
-function analyze_simulation_states(sim::simulation; threshold_distance=nothing)
-    # Use sim.d_dimer if threshold_distance not provided
-    threshold = isnothing(threshold_distance) ? sim.d_dimer : threshold_distance
-    
-    n_steps = length(sim.particle_1)
-    estimated_states = Int[]
-    
-    # Estimate states based on inter-particle distance
-    for i in 1:n_steps
-        dist = sqrt((sim.particle_1[i].x - sim.particle_2[i].x)^2 + 
-                   (sim.particle_1[i].y - sim.particle_2[i].y)^2)
-        
-        # State 1: free (far apart), State 2: bound (close together)
-        if dist > threshold
-            push!(estimated_states, 1)  # Free state
-        else
-            push!(estimated_states, 2)  # Bound state
-        end
-    end
-    
-    return estimated_states
-end
+println("Simulation completed with $(length(states)) time points and $steps steps")
+println("Number of state changes: $(sum(abs.(diff(states))))")
 
-# Function to get transition times from simulation
-function get_transition_times(sim::simulation; threshold_distance=nothing)
-    estimated_states = analyze_simulation_states(sim, threshold_distance=threshold_distance)
-    return get_state_transitions(estimated_states)
-end
+fig = Figure(size=(800, 400))
+ax = Axis(fig[1, 1],  xlabel="Time Steps",  ylabel="State", title="Two-State Markov Chain with k12=$k12, k21=$k21")
 
-# Function to create time sequence from simulation
-function time_sequence_from_simulation(sim::simulation; threshold_distance=nothing)
-    estimated_states = analyze_simulation_states(sim, threshold_distance=threshold_distance)
-    return time_sequence(estimated_states)
-end
 
-# Function to plot state sequence from simulation
-function plot_simulation_states(sim::simulation; threshold_distance=nothing)
-    estimated_states = analyze_simulation_states(sim, threshold_distance=threshold_distance)
-    times = get_times(sim)
-    
-    fig = Figure(size=(800, 400))
-    ax = Axis(fig[1, 1], 
-              xlabel="Time", 
-              ylabel="State", 
-              title="State Sequence from Simulation (k_on=$(sim.k_states[1]), k_off=$(sim.k_states[2]))")
-    
-    lines!(ax, times, estimated_states, color=:blue, linewidth=2)
-    scatter!(ax, times, estimated_states, color=:red, markersize=4)
-    
-    return fig
-end
+lines!(ax, 1:length(states), states, color=:blue, linewidth=1.5)
+
+save("generated_data/markov_chain_simulation.png", fig)
+display(fig)=#
 
