@@ -65,3 +65,104 @@ function constrained_diffusion(; initial_p1 = nothing,D = 0.01,r = 0.2,box = 1.0
     
     return p1_positions, p2_positions
 end
+
+# Custom type integration - Include these when working with simulation types
+# include("types/types_with_data.jl")
+
+# Function to create constrained diffusion simulation using custom types
+function constrained_diffusion_simulation(; initial_p1 = nothing, k_on = 0.5, k_off = 0.3,
+                                        D = 0.01, r = 0.2, box = 1.0, dt = 0.016, steps = 500, σ = 0.0)
+    
+    # Generate constrained diffusion trajectories
+    p1_matrix, p2_matrix = constrained_diffusion(initial_p1=initial_p1, D=D, r=r, box=box, dt=dt, steps=steps)
+    
+    # Create dummy states (all bound state since it's constrained diffusion)
+    states = fill(2, steps-1)  # State 2 = bound state
+    
+    # Create simulation object
+    k_states = [k_on, k_off]
+    sim = simulation(p1_matrix, p2_matrix, states, k_states, D, dt=dt, σ=σ)
+    
+    return sim
+end
+
+# Function to extract constrained segments from existing simulation
+function extract_bound_segments(sim::simulation, threshold_distance = nothing)
+    # Use sim.d_dimer if threshold_distance not provided
+    threshold = isnothing(threshold_distance) ? sim.d_dimer : threshold_distance
+    
+    n_steps = length(sim.particle_1)
+    bound_segments = []
+    current_segment_start = nothing
+    
+    for i in 1:n_steps
+        dist = sqrt((sim.particle_1[i].x - sim.particle_2[i].x)^2 + 
+                   (sim.particle_1[i].y - sim.particle_2[i].y)^2)
+        
+        if dist <= threshold  # Particles are bound
+            if isnothing(current_segment_start)
+                current_segment_start = i
+            end
+        else  # Particles are free
+            if !isnothing(current_segment_start)
+                # End of bound segment
+                push!(bound_segments, (start=current_segment_start, stop=i-1))
+                current_segment_start = nothing
+            end
+        end
+    end
+    
+    # Handle case where simulation ends while bound
+    if !isnothing(current_segment_start)
+        push!(bound_segments, (start=current_segment_start, stop=n_steps))
+    end
+    
+    return bound_segments
+end
+
+# Function to analyze dimer properties from simulation
+function analyze_dimer_properties(sim::simulation)
+    bound_segments = extract_bound_segments(sim)
+    
+    # Calculate average binding duration
+    binding_durations = []
+    for segment in bound_segments
+        duration = sim.particle_1[segment.stop].t - sim.particle_1[segment.start].t
+        push!(binding_durations, duration)
+    end
+    
+    avg_binding_time = isempty(binding_durations) ? 0.0 : mean(binding_durations)
+    
+    # Calculate binding frequency
+    total_time = sim.particle_1[end].t - sim.particle_1[1].t
+    binding_frequency = length(bound_segments) / total_time
+    
+    return (
+        bound_segments = bound_segments,
+        binding_durations = binding_durations,
+        avg_binding_time = avg_binding_time,
+        binding_frequency = binding_frequency,
+        num_binding_events = length(bound_segments)
+    )
+end
+
+# Function to create a new simulation with only bound segments
+function create_bound_only_simulation(sim::simulation, segment_index::Int = 1)
+    bound_segments = extract_bound_segments(sim)
+    
+    if segment_index > length(bound_segments)
+        error("Segment index $segment_index exceeds number of bound segments ($(length(bound_segments)))")
+    end
+    
+    segment = bound_segments[segment_index]
+    
+    # Extract particles for this segment
+    segment_particles_1 = sim.particle_1[segment.start:segment.stop]
+    segment_particles_2 = sim.particle_2[segment.start:segment.stop]
+    
+    # Create new simulation with only this bound segment
+    states_segment = fill(2, length(segment_particles_1)-1)  # All bound state
+    
+    return simulation(segment_particles_1, segment_particles_2, 
+                     sim.k_states, sim.σ, sim.D, sim.dt, sim.d_dimer)
+end

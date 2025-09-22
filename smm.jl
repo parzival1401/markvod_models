@@ -162,3 +162,19 @@ axislegend(position = :rt)
 display(fig)
 
 
+######################################
+
+using SMLMSim
+
+# Set diffusion simulation parameters
+params = DiffusionSMLMParams(
+    density = 0.5,        # molecules per μm²
+    box_size = 10.0,      # μm
+    diff_monomer = 0.1,   # μm²/s
+    k_off = 0.2,          # s⁻¹ dimer dissociation rate
+    dt = 0.01,            # s simulation timestep
+    t_max = 10.0          # s total simulation time
+)
+
+# Run diffusion simulation
+smld = simulate(params) # Returns a BasicSMLD object with all emitters
