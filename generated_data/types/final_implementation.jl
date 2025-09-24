@@ -256,7 +256,7 @@ function run_simulation_smlms(;k_off=0.3, d_dimer=0.08, t_max=10.0, dt=0.01,
     println("   Setting up SMLMSim DiffusionSMLMParams...")
 
         # Create SMLMSim parameters structure
-        params = SMLMSim.DiffusionSMLMParams(
+        params = DiffusionSMLMParams(
             box_size = box_size,
             diff_monomer = D,        # Monomer diffusion coefficient
             diff_dimer = D * 0.5,    # Dimer diffuses slower
@@ -273,7 +273,7 @@ function run_simulation_smlms(;k_off=0.3, d_dimer=0.08, t_max=10.0, dt=0.01,
         
         # Step 2: Create initial particles
         println("   Creating initial DiffusingEmitter2D particles...")
-        particle1 = SMLMSim.DiffusingEmitter2D{Float64}(
+        particle1 = DiffusingEmitter2D{Float64}(
             box_size * 0.3, box_size * 0.3,  # Position in lower-left area
             1000.0,         # Photons
             0.0,            # Initial timestamp
@@ -284,7 +284,7 @@ function run_simulation_smlms(;k_off=0.3, d_dimer=0.08, t_max=10.0, dt=0.01,
             nothing         # No partner initially
         )
         
-        particle2 = SMLMSim.DiffusingEmitter2D{Float64}(
+        particle2 = DiffusingEmitter2D{Float64}(
             box_size * 0.7, box_size * 0.7,  # Position in upper-right area
             1000.0,         # Photons
             0.0,            # Initial timestamp
