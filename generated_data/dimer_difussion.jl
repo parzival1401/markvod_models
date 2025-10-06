@@ -66,8 +66,22 @@ function constrained_diffusion(; initial_p1 = nothing,D = 0.01,r = 0.2,box = 1.0
     return p1_positions, p2_positions
 end
 
-# Custom type integration - Include these when working with simulation types
-# include("types/types_with_data.jl")
+# Define required types for this module
+struct Particles
+    x::Float64
+    y::Float64
+    t::Float64
+end
+
+struct simulation
+    particle_1::Vector{Particles}
+    particle_2::Vector{Particles}
+    k_states::Vector{Float64}
+    sigma::Float64
+    D::Float64
+    dt::Float64
+    d_dimer::Float64
+end
 
 # Function to create constrained diffusion simulation using custom types
 function constrained_diffusion_simulation(; initial_p1 = nothing, k_on = 0.5, k_off = 0.3,

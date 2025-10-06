@@ -119,3 +119,4 @@ Legend(fig[1, 2], legend_elements, legend_labels, "States")
 limits!(ax, -0.05, 1.05, -0.05, 1.05)
 
 fig
+
