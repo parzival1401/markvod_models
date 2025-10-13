@@ -3,6 +3,16 @@ using Random
 using Distributions
 using Optim
 
+# Import SMLMSim if available
+try
+    using SMLMSim
+    global SMLMSIM_AVAILABLE = true
+    println("✅ SMLMSim package loaded successfully")
+catch e
+    global SMLMSIM_AVAILABLE = false
+    println("⚠️  SMLMSim package not available - SMLMSim functions will be disabled")
+end
+
 # ========================================
 # LOAD EXTERNAL DEPENDENCIES
 # ========================================
@@ -769,6 +779,149 @@ function analyze_simulation_complete(sim::simulation; dt=0.01, sigma=0.1,
 end
 
 # ========================================
+# SMLMSIM INTEGRATION (MATCHING new_smlsmsim.jl)
+# ========================================
+
+"""
+Create simulation using SMLMSim's diffusion dynamics with DiffusionSMLMParams
+Follows the exact structure from new_smlsmsim.jl
+Usage: sim = run_simulation_smlms(k_off=0.5, r_react=0.05, ...)
+"""
+function run_simulation_smlms(;k_off=0.5, d_dimer=0.07, t_max=5.0, dt=0.01,
+                             sigma=0.01, diff_monomer=0.1, diff_dimer=0.05,
+                             box_size=1.0, r_react=0.05, camera_framerate=10.0,
+                             pos1=[0.2, 0.2], pos2=[0.8, 0.8])
+
+    if !SMLMSIM_AVAILABLE
+        error("SMLMSim package is not available. Please install it with: using Pkg; Pkg.add(\"SMLMSim\")")
+    end
+
+    println("🔬 Creating SMLMSim diffusion simulation...")
+    println("   Parameters: k_off=$(k_off), r_react=$(r_react), d_dimer=$(d_dimer)")
+    println("   Diffusion: diff_monomer=$(diff_monomer), diff_dimer=$(diff_dimer)")
+    println("   Box size: $(box_size), t_max=$(t_max), dt=$(dt)")
+
+    # Step 1: Set up SMLMSim diffusion parameters (matching new_smlsmsim.jl lines 5-16)
+    params = SMLMSim.DiffusionSMLMParams(
+        box_size = box_size,
+        diff_monomer = diff_monomer,
+        diff_dimer = diff_dimer,
+        k_off = k_off,
+        r_react = r_react,
+        d_dimer = d_dimer,
+        dt = dt,
+        t_max = t_max,
+        boundary = "reflecting",
+        camera_framerate = camera_framerate
+    )
+
+    println("   ✅ DiffusionSMLMParams created")
+
+    # Step 2: Create initial particles (matching new_smlsmsim.jl lines 18-39)
+    particle1 = SMLMSim.DiffusingEmitter2D{Float64}(
+        pos1[1], pos1[2],   # Position
+        1000.0,             # Photons
+        0.0,                # Initial timestamp
+        1,                  # Initial frame
+        1,                  # Dataset
+        1,                  # track_id
+        :monomer,           # Initial state
+        nothing             # No partner initially
+    )
+
+    particle2 = SMLMSim.DiffusingEmitter2D{Float64}(
+        pos2[1], pos2[2],   # Position
+        1000.0,             # Photons
+        0.0,                # Initial timestamp
+        1,                  # Initial frame
+        1,                  # Dataset
+        2,                  # track_id
+        :monomer,           # Initial state
+        nothing             # No partner initially
+    )
+
+    println("   ✅ Initial particles created")
+    println("      P1: ($(round(particle1.x, digits=3)), $(round(particle1.y, digits=3)))")
+    println("      P2: ($(round(particle2.x, digits=3)), $(round(particle2.y, digits=3)))")
+
+    # Step 3: Run simulation (matching new_smlsmsim.jl line 42)
+    println("   Running SMLMSim simulation...")
+    smld = SMLMSim.simulate(params; starting_conditions=[particle1, particle2])
+
+    # Step 4: Extract tracks (matching new_smlsmsim.jl line 44)
+    track_smlds = SMLMSim.get_tracks(smld)
+
+    if length(track_smlds) < 2
+        error("Expected 2 tracks but got $(length(track_smlds))")
+    end
+
+    # Step 5: Convert to trajectories (matching new_smlsmsim.jl lines 47-62)
+    println("   Extracting trajectories from tracks...")
+    trajectories = []
+    for track_smld in track_smlds
+        # Get ID from first emitter
+        id = track_smld.emitters[1].track_id
+
+        # Sort by timestamp
+        sort!(track_smld.emitters, by = e -> e.timestamp)
+
+        # Extract coordinates and state
+        times = [e.timestamp for e in track_smld.emitters]
+        x = [e.x for e in track_smld.emitters]
+        y = [e.y for e in track_smld.emitters]
+        states = [e.state for e in track_smld.emitters]
+
+        push!(trajectories, (id=id, times=times, x=x, y=y, states=states))
+    end
+
+    # Sort trajectories by ID to ensure consistent ordering
+    sort!(trajectories, by = t -> t.id)
+
+    # Step 6: Convert to custom simulation type
+    println("   Converting to custom simulation format...")
+
+    # Use trajectory data directly (no interpolation needed if using camera frames)
+    traj1 = trajectories[1]
+    traj2 = trajectories[2]
+
+    # Create particle vectors from trajectory data
+    n_steps = min(length(traj1.times), length(traj2.times))
+    particle_1 = [Particles(traj1.x[i], traj1.y[i], traj1.times[i]) for i in 1:n_steps]
+    particle_2 = [Particles(traj2.x[i], traj2.y[i], traj2.times[i]) for i in 1:n_steps]
+
+    # Calculate effective k_on from r_react
+    # In SMLMSim, binding occurs when particles are within r_react
+    # Approximate k_on based on reaction radius and diffusion
+    effective_k_on = r_react * 10.0  # Scaling factor
+
+    k_states = [effective_k_on, k_off]
+    sim = simulation(particle_1, particle_2, k_states, sigma, diff_monomer, dt, d_dimer)
+
+    # Step 7: Analysis of binding events
+    binding_events = 0
+    unbinding_events = 0
+    for traj in trajectories
+        for i in 2:length(traj.states)
+            if traj.states[i-1] == :monomer && traj.states[i] == :dimer
+                binding_events += 1
+            elseif traj.states[i-1] == :dimer && traj.states[i] == :monomer
+                unbinding_events += 1
+            end
+        end
+    end
+
+    println("   ✅ SMLMSim simulation completed")
+    println("      Total time steps: $(n_steps)")
+    println("      Duration: $(round(traj1.times[end], digits=2)) s")
+    println("      Binding events: $(binding_events)")
+    println("      Unbinding events: $(unbinding_events)")
+    println("      Effective k_on: $(round(effective_k_on, digits=4))")
+    println("      k_off: $(round(k_off, digits=4))")
+
+    return sim, trajectories
+end
+
+# ========================================
 # EXAMPLE WORKFLOWS
 # ========================================
 
@@ -835,14 +988,51 @@ function example_noise_comparison()
     return sim_clean, sim_noisy, analysis_clean, analysis_noisy
 end
 
+"""
+Example: SMLMSim workflow (matching new_smlsmsim.jl)
+"""
+function example_smlmsim_workflow()
+    println("=" ^ 60)
+    println("EXAMPLE: SMLMSim Integration Workflow")
+    println("=" ^ 60)
+
+    Random.seed!(1234)
+
+    # Create simulation using SMLMSim
+    sim, trajectories = run_simulation_smlms(
+        k_off=0.5,
+        r_react=0.05,
+        d_dimer=0.07,
+        t_max=5.0,
+        dt=0.01,
+        diff_monomer=0.1,
+        diff_dimer=0.05,
+        box_size=1.0,
+        camera_framerate=10.0
+    )
+
+    # Analyze simulation
+    println("\n📊 Analyzing SMLMSim simulation...")
+    analysis = analyze_simulation_complete(sim;
+                                         optimize_params=true,
+                                         create_animation=true,
+                                         dt=0.01,
+                                         sigma=0.01)
+
+    println("\n✅ SMLMSim workflow completed!")
+    return sim, trajectories, analysis
+end
+
 println("🎯 Final Implementation Module Loaded Successfully!")
 println("=" ^ 60)
 println("Available workflows:")
 println("  🔬 example_physics_workflow()     - Physics-based simulation")
 println("  📊 example_noise_comparison()     - Noise sensitivity analysis")
+println("  🧬 example_smlmsim_workflow()     - SMLMSim integration")
 println()
 println("Core functions:")
 println("  🔬 run_simulation()               - Create physics-based simulation")
+println("  🧬 run_simulation_smlms()         - Create SMLMSim simulation")
 println("  📊 analyze_simulation_complete()  - Full analysis with optimization")
 println("  🎬 animate_simulation()           - Create animation")
 println("  ⚙️  optimize_k_parameters_custom() - Optimize k parameters")
